@@ -41,7 +41,11 @@ public class BoardRenderer : MonoBehaviour
                 SpriteRenderer renderer = instance.GetComponent<SpriteRenderer>();
                 renderer.material = squareMaterial;
 
-                instance.GetComponent<SquareView>().position = new Vector2(file, rank);
+                SquareView squareView = instance.GetComponent<SquareView>();
+
+                squareView.position = new Vector2(file, rank);
+                squareView.material = squareMaterial;
+                squareView.squareIndex = squareIndex;
 
                 squares[squareIndex++] = instance;
             }
@@ -52,7 +56,7 @@ public class BoardRenderer : MonoBehaviour
     {
         for (int i = 0; i < 64; i++)
         {
-            int currentPiece = BoardManager.Squares[i];
+            int currentPiece = BoardManager.Instance.Squares[i];
             if (currentPiece != 0)
             {
                 GameObject instance = Instantiate(piecePrefabsData.GetPrefab(currentPiece), squares[i].transform);

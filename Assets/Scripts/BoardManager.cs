@@ -3,18 +3,28 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 
-public static class BoardManager
+public class BoardManager : MonoBehaviour
 {
-    public static int[] Squares;
-    public static string fen = "6k1/5ppp/8/8/8/8/1Q5K/8 w - - 0 1";
+    public static BoardManager Instance { get; private set; }
 
-    static BoardManager()
+    public int[] Squares;
+    public string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+    private void Awake()
     {
-        Squares = new int[64];
-        fenToBoard();
+        if (Instance == null)
+        {
+            Instance = this;
+            Squares = new int[64];
+            FenToBoard();
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    public static void fenToBoard()
+    private void FenToBoard()
     {
         var dict = new Dictionary<char, int>()
         {
