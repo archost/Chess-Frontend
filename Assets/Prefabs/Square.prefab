@@ -109,7 +109,9 @@ MonoBehaviour:
   position: {x: 0, y: 0}
   piece: {fileID: 0}
   material: {fileID: 0}
-  selectedMaterial: {fileID: 2100000, guid: 15f008aadd9a58142a766174c0618988, type: 2}
+  squareIndex: 0
+  selectedMat: {fileID: 2100000, guid: 15f008aadd9a58142a766174c0618988, type: 2}
+  lastMoveSquareMat: {fileID: 2100000, guid: b558fca2c6dc3bc4288853c2fcfc82b0, type: 2}
 --- !u!61 &-2369966217859058559
 BoxCollider2D:
   m_ObjectHideFlags: 0

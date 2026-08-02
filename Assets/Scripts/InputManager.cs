@@ -5,6 +5,7 @@ public class InputManager : MonoBehaviour
     [SerializeField] private Camera _camera;
 
     private SquareView _selectedSquare;
+
     private SquareView _fromSquare;
     private SquareView _toSquare;
 
@@ -30,6 +31,11 @@ public class InputManager : MonoBehaviour
         RaycastHit2D rayHit = Physics2D.GetRayIntersection(Camera.main.ScreenPointToRay(Input.mousePosition));
         if (rayHit.transform.TryGetComponent<SquareView>(out _selectedSquare))
         {
+            if (_fromSquare != null && _toSquare != null && _fromSquare != _selectedSquare)
+            {
+                _fromSquare.ResetSquareColor();
+                _toSquare.ResetSquareColor();
+            }
             if (_isSelection)
             {
                 _selectedPiece = _selectedSquare.GetComponentInChildren<PieceView>();
@@ -44,7 +50,7 @@ public class InputManager : MonoBehaviour
             else if (_fromSquare != _selectedSquare)
             {
                 _toSquare = _selectedSquare;
-                _fromSquare.UnselectSquare();
+                _fromSquare.UnselectSquare(_toSquare);
                 _fromSquare.MoveTo(_toSquare);
                 _isSelection = true;
             }

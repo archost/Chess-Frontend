@@ -28,18 +28,14 @@ public class BoardRenderer : MonoBehaviour
     private void DrawBoard()
     {
         int squareIndex = 0;
-        for (int rank = 7; rank >= 0; rank--)
+        for (int rank = 0; rank < 8; rank++)
         {
             for (int file = 0; file < 8; file++)
             {
-                bool isLightSquare = (file + rank) % 2 != 0;
-                Material squareMaterial = isLightSquare ? lightColor : darkColor;
+                Material squareMaterial = (file + rank) % 2 != 0 ? lightColor : darkColor;
 
                 GameObject instance = Instantiate(squarePrefab, transform);
                 instance.transform.position = new Vector2(-3.5f + file, -3.5f + rank);
-
-                SpriteRenderer renderer = instance.GetComponent<SpriteRenderer>();
-                renderer.material = squareMaterial;
 
                 SquareView squareView = instance.GetComponent<SquareView>();
 
@@ -56,7 +52,7 @@ public class BoardRenderer : MonoBehaviour
     {
         for (int i = 0; i < 64; i++)
         {
-            int currentPiece = BoardManager.Instance.Squares[i];
+            int currentPiece = BoardManager.Instance.squares[i];
             if (currentPiece != 0)
             {
                 GameObject instance = Instantiate(piecePrefabsData.GetPrefab(currentPiece), squares[i].transform);

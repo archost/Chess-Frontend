@@ -7,15 +7,15 @@ public class BoardManager : MonoBehaviour
 {
     public static BoardManager Instance { get; private set; }
 
-    public int[] Squares;
-    public string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    public int[] squares;
+    public string fen = "7k/3N2qp/b5r1/2p1Q1N1/Pp4PK/7P/1P3p2/6r1 w - - 7 4";
 
     private void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
-            Squares = new int[64];
+            squares = new int[64];
             FenToBoard();
         }
         else
@@ -26,7 +26,7 @@ public class BoardManager : MonoBehaviour
 
     private void FenToBoard()
     {
-        var dict = new Dictionary<char, int>()
+        var piecesValues = new Dictionary<char, int>()
         {
             { 'p', Piece.Pawn },
             { 'n', Piece.Knight },
@@ -36,28 +36,33 @@ public class BoardManager : MonoBehaviour
             { 'k', Piece.King }
         };
 
-        int fenIndex = 0, boardIndex = 0;
-        while (fen[fenIndex] != ' ')
-        {
-            int currentPiece = 0;
+        string fenBoard = fen.Split(' ')[0];
+        int currentPiece;
+        int file = 0, rank = 7;
 
-            if (fen[fenIndex] >= 'A' && fen[fenIndex] <= 'z')
+        foreach (char symbol in fenBoard)
+        {
+            currentPiece = 0;
+            if (symbol == '/')
             {
-                currentPiece |= fen[fenIndex] <= 'Z' ? Piece.White : Piece.Black;
-                currentPiece |= dict[char.ToLowerInvariant(fen[fenIndex])];
-                Squares[boardIndex] = currentPiece;
-                fenIndex++;
-                boardIndex++;
-            }
-            else if (fen[fenIndex] >= '0' && fen[fenIndex] <= '9')
-            {
-                boardIndex += (int)fen[fenIndex] - '0';
-                fenIndex++;
+                file = 0;
+                rank--;
             }
             else
             {
-                fenIndex++;
+                if (char.IsDigit(symbol))
+                {
+                    file += (int)char.GetNumericValue(symbol);
+                }
+                else
+                {
+                    currentPiece |= (char.IsUpper(symbol)) ? Piece.White : Piece.Black;
+                    currentPiece |= piecesValues[char.ToLower(symbol)];
+                    squares[file + 8 * rank] = currentPiece;
+                    file++;
+                }
             }
+
         }
     }
 }
