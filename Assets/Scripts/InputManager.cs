@@ -6,13 +6,6 @@ public class InputManager : MonoBehaviour
 
     private SquareView _selectedSquare;
 
-    private SquareView _fromSquare;
-    private SquareView _toSquare;
-
-    private PieceView _selectedPiece;
-
-    private bool _isSelection = true;
-
     void Start()
     {
         
@@ -31,6 +24,8 @@ public class InputManager : MonoBehaviour
         RaycastHit2D rayHit = Physics2D.GetRayIntersection(Camera.main.ScreenPointToRay(Input.mousePosition));
         if (rayHit.transform.TryGetComponent<SquareView>(out _selectedSquare))
         {
+            GameController.Instance.ProcessClick(_selectedSquare.squareIndex);
+            /*
             if (_fromSquare != null && _toSquare != null && _fromSquare != _selectedSquare)
             {
                 _fromSquare.ResetSquareColor();
@@ -41,10 +36,13 @@ public class InputManager : MonoBehaviour
                 _selectedPiece = _selectedSquare.GetComponentInChildren<PieceView>();
                 if (_selectedPiece != null)
                 {
-                    Debug.Log("Found a piece");
-                    _fromSquare = _selectedSquare;
-                    _fromSquare.SelectSquare();
-                    _isSelection = false;
+                    if (Piece.IsColor(_selectedPiece.pieceType, BoardManager.Instance.colorToMove))
+                    {
+                        Debug.Log("Found a piece");
+                        _fromSquare = _selectedSquare;
+                        _fromSquare.SelectSquare();
+                        _isSelection = false;
+                    }
                 }
             }
             else if (_fromSquare != _selectedSquare)
@@ -54,6 +52,7 @@ public class InputManager : MonoBehaviour
                 _fromSquare.MoveTo(_toSquare);
                 _isSelection = true;
             }
+            */
         }
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using UnityEditor;
 using UnityEngine;
 
 public class BoardManager : MonoBehaviour
@@ -9,6 +10,7 @@ public class BoardManager : MonoBehaviour
 
     public int[] squares;
     public string fen = "7k/3N2qp/b5r1/2p1Q1N1/Pp4PK/7P/1P3p2/6r1 w - - 7 4";
+    public int colorToMove = 8;
 
     private void Awake()
     {
@@ -64,5 +66,24 @@ public class BoardManager : MonoBehaviour
             }
 
         }
+    }
+
+    public void ExecuteMove(int fromIndex, int toIndex)
+    {
+        // TODO: определить, это обычный ход, или 
+        // // Ракировка 
+        // // EN PASSANT!!!
+        // // Promotion
+
+        // Пока предположим, что это просто обычный ход
+        // И пока без разницы, это взятие или нет
+        squares[toIndex] = squares[fromIndex];
+        squares[fromIndex] = 0;
+
+        // Обновляем чей ход
+        colorToMove = colorToMove ^ 24;
+        
+        // Вызвать метод обновления визуала у BoardRenderer
+        BoardRenderer.Instance.UpdateBoardAfterAMove(fromIndex, toIndex);
     }
 }

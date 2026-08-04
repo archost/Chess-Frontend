@@ -1,10 +1,13 @@
 using System;
 using System.Collections;
 using System.Linq;
+using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class BoardRenderer : MonoBehaviour
 {
+    public static BoardRenderer Instance { get; private set; }
+
     [SerializeField] private Material lightColor;
     [SerializeField] private Material darkColor;
 
@@ -12,6 +15,18 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private PiecePrefabsData piecePrefabsData;
 
     private GameObject[] squares;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
 
     void Start()
     {
@@ -23,6 +38,12 @@ public class BoardRenderer : MonoBehaviour
     void Update()
     {
 
+    }
+    
+
+    public SquareView getSquare(int index)
+    {
+        return squares[index].GetComponent<SquareView>();
     }
 
     private void DrawBoard()
@@ -60,5 +81,32 @@ public class BoardRenderer : MonoBehaviour
                 instance.GetComponent<PieceView>().square = squares[i].GetComponent<SquareView>();
             }
         }
+    }
+
+    public void UpdateBoardAfterAMove(int fromIndex, int toIndex)
+    {
+        // ѕока сделаем обычный ход, из одной клетки в другую
+
+        GameObject fromSquare = squares[fromIndex];
+        GameObject toSquare = squares[toIndex];
+
+        SquareView fromSquareView = fromSquare.GetComponent<SquareView>();
+        SquareView toSquareView = toSquare.GetComponent<SquareView>();
+
+        // ≈сли на целевой клетке есть фигура - удалить ее
+        if (toSquareView.piece != null)
+        {
+            Destroy(toSquareView.piece.gameObject);
+        }
+
+        // ”становить текущей фигуре родител€ - целевую клетку
+        fromSquareView.piece.transform.SetParent(toSquare.transform, false);
+
+        // ќбновить значени€ фигур у клеток
+        toSquareView.piece = fromSquareView.piece;
+        fromSquareView.piece = null;
+
+        // ќбновить значение клетки у новой фигуры
+        toSquareView.piece.square = toSquareView;
     }
 }

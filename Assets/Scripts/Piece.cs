@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using UnityEditor.PackageManager;
+using UnityEngine;
 
 public static class Piece
 {
@@ -12,4 +14,24 @@ public static class Piece
 
     public const int White = 8;
     public const int Black = 16;
+
+    public static int GetType(int piece)
+    {
+        return piece & 7;
+    }
+
+    public static bool IsSlidingPiece(int piece)
+    {
+        return (piece & 4) != 0;
+    }
+
+    public static int GetColor(int piece)
+    {
+        return piece & 24;
+    }
+
+    public static bool IsSameColor(int piece1, int piece2)
+    {
+        return GetColor(piece1) == GetColor(piece2);
+    }
 }
