@@ -78,9 +78,12 @@ public class GameController : MonoBehaviour
     private void MakeAMove(int squareIndex)
     {
         int pieceToMove = BoardManager.Instance.squares[_selectedIndex];
+
         MoveGenerator.Instance.GenerateMoves();
+
         Move move = new Move(_selectedIndex, squareIndex);
         bool legal = false;
+
         // Проверить, легален ли ход
         foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
         {
@@ -91,9 +94,7 @@ public class GameController : MonoBehaviour
             }
         }
 
-        if ((Piece.GetType(pieceToMove) == Piece.Queen ||
-            Piece.GetType(pieceToMove) == Piece.Rook ||
-            Piece.GetType(pieceToMove) == Piece.Bishop) && legal == false)
+        if (!legal)
         {
             Debug.Log("This move is ILLEGAL!");
             return;

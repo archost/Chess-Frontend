@@ -30,8 +30,9 @@ public class MoveGenerator : MonoBehaviour
 {
     public static MoveGenerator Instance;
 
-    public int[] DirectionOffsets = { 8, -8, -1, 1, 7, -7, 9, -9 };
-    public int[][] numSquaresToEdge;
+    private int[] directionOffsets = { 8, -8, -1, 1, 7, -7, 9, -9 };
+    private int[][] numSquaresToEdge;
+    private int[][] knightMoves;
     public List<Move> pseudoLegalMoves;
 
     private void Awake()
@@ -48,13 +49,14 @@ public class MoveGenerator : MonoBehaviour
 
     private void Start()
     {
-        numSquaresToEdge = new int[64][];
         PrecomputedMoveData();
         pseudoLegalMoves = GenerateMoves();
     }
 
     public void PrecomputedMoveData()
     {
+        numSquaresToEdge = new int[64][];
+        // Sliding pieces
         for (int file = 0; file < 8; file++)
         {
             for (int rank = 0; rank < 8; rank++)
@@ -79,6 +81,34 @@ public class MoveGenerator : MonoBehaviour
                 };
             }
         }
+
+        // Knight
+        knightMoves = new int[64][];
+        
+        int[] dr = { 2, 2, -2, -2, 1, 1, -1, -1 };
+        int[] df = { 1, -1, 1, -1, 2, -2, 2, -2 };
+
+        for (int square = 0; square < 64; square++)
+        {
+            int rank = square / 8;
+            int file = square % 8;
+
+            List<int> validMoves = new List<int>();
+
+            for (int i = 0; i < 8; i++)
+            {
+                int newRank = rank + dr[i];
+                int newFile = file + df[i];
+
+                if (newRank >= 0 && newRank < 8 && newFile >= 0 && newFile < 8)
+                {
+                    int targetSquare = newRank * 8 + newFile;
+                    validMoves.Add(targetSquare);
+                }
+            }
+
+            knightMoves[square] = validMoves.ToArray();
+        }
     }
     
     public List<Move> GenerateMoves()
@@ -93,12 +123,23 @@ public class MoveGenerator : MonoBehaviour
                 {
                     GenerateSlidingMoves(startSquare, piece);
                 }
+                if (Piece.GetType(piece) == Piece.Knight)
+                {
+                    GenerateKnightMoves(startSquare, piece);
+                }
+                if (Piece.GetType(piece) == Piece.King)
+                {
+                    GenerateKingMoves(startSquare, piece);
+                }
+                if (Piece.GetType(piece).Equals(Piece.Pawn)){
+                    GeneratePawnMoves(startSquare, piece);
+                }
             }
         }
         return pseudoLegalMoves;
     }
 
-    void GenerateSlidingMoves(int startSquare, int piece)
+    private void GenerateSlidingMoves(int startSquare, int piece)
     {
         int startDirIndex = Piece.GetType(piece) == Piece.Bishop ? 4 : 0;
         int endDirIndex = Piece.GetType(piece) == Piece.Rook ? 4 : 8;
@@ -107,7 +148,7 @@ public class MoveGenerator : MonoBehaviour
         {
             for (int n = 0; n < numSquaresToEdge[startSquare][directionIndex]; n++)
             {
-                int targetSquare = startSquare + DirectionOffsets[directionIndex] * (n + 1);
+                int targetSquare = startSquare + directionOffsets[directionIndex] * (n + 1);
                 int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
 
                 // Blocked by friendly piece, so can't move any further in this direction
@@ -128,4 +169,74 @@ public class MoveGenerator : MonoBehaviour
         }
     }
 
+    private void GenerateKnightMoves(int startSquare, int piece)
+    {
+        int[] targets = knightMoves[startSquare];
+
+        for (int i = 0; i < targets.Length; i++)
+        {
+            int targetSquare = targets[i];
+            int pieceOnTarget = BoardManager.Instance.squares[targetSquare];
+
+            if (!Piece.IsSameColor(pieceOnTarget, piece))
+            {
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            }
+        }
+    }
+
+    private void GenerateKingMoves(int startSquare, int piece)
+    {
+        for (int directionIndex = 0; directionIndex < 8; directionIndex++)
+        {
+            if (numSquaresToEdge[startSquare][directionIndex] > 0)
+            {
+                // ≈сли в определенную сторону есть хот€ бы одна клетка дл€ хода, то можно туда ходить
+                // нужно только проверить, не стоит ли там наша фигура
+                int targetSquare = startSquare + directionOffsets[directionIndex];
+                int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
+
+                if (Piece.IsSameColor(pieceOnTargetSquare, piece))
+                {
+                    continue;
+                }
+
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            }
+        }
+    }
+
+    private void GeneratePawnMoves(int startSquare, int piece)
+    {
+        int direction = Piece.GetColor(piece) == Piece.White ? 8 : -8;
+        // ’од на 1 клетку
+        int targetSquare = startSquare + direction;
+        if (BoardManager.Instance.squares[targetSquare] == Piece.None)
+        {
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+        }
+
+        // ’од на 2 клетки
+        bool isPawnOnStartingPos = ((Piece.GetColor(piece) == Piece.White) && (startSquare / 8 == 1)) ||
+            ((Piece.GetColor(piece) == Piece.Black) && (startSquare / 8 == 6));
+
+        targetSquare = startSquare + direction * 2;
+        if (isPawnOnStartingPos && BoardManager.Instance.squares[targetSquare] == Piece.None)
+        {
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+        }
+
+        // ¬з€тие (нужно проверить две клетки по диагонали)
+        targetSquare = startSquare + direction + 1;
+        if (BoardManager.Instance.squares[targetSquare] != Piece.None)
+        {
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+        }
+
+        targetSquare = startSquare + direction - 1;
+        if (BoardManager.Instance.squares[targetSquare] != Piece.None)
+        {
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+        }
+    }
 }
