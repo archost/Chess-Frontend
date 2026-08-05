@@ -1,22 +1,34 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using UnityEditor;
 using UnityEngine;
 
-public static class BoardManager
+public class BoardManager : MonoBehaviour
 {
-    public static int[] Squares;
-    public static string fen = "6k1/5ppp/8/8/8/8/1Q5K/8 w - - 0 1";
+    public static BoardManager Instance { get; private set; }
 
-    static BoardManager()
+    public int[] squares;
+    public string fen = "7k/3N2qp/b5r1/2p1Q1N1/Pp4PK/7P/1P3p2/6r1 w - - 7 4";
+    public int colorToMove = 8;
+
+    private void Awake()
     {
-        Squares = new int[64];
-        fenToBoard();
+        if (Instance == null)
+        {
+            Instance = this;
+            squares = new int[64];
+            FenToBoard();
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    public static void fenToBoard()
+    private void FenToBoard()
     {
-        var dict = new Dictionary<char, int>()
+        var piecesValues = new Dictionary<char, int>()
         {
             { 'p', Piece.Pawn },
             { 'n', Piece.Knight },
@@ -26,28 +38,52 @@ public static class BoardManager
             { 'k', Piece.King }
         };
 
-        int fenIndex = 0, boardIndex = 0;
-        while (fen[fenIndex] != ' ')
-        {
-            int currentPiece = 0;
+        string fenBoard = fen.Split(' ')[0];
+        int currentPiece;
+        int file = 0, rank = 7;
 
-            if (fen[fenIndex] >= 'A' && fen[fenIndex] <= 'z')
+        foreach (char symbol in fenBoard)
+        {
+            currentPiece = 0;
+            if (symbol == '/')
             {
-                currentPiece |= fen[fenIndex] <= 'Z' ? Piece.White : Piece.Black;
-                currentPiece |= dict[char.ToLowerInvariant(fen[fenIndex])];
-                Squares[boardIndex] = currentPiece;
-                fenIndex++;
-                boardIndex++;
-            }
-            else if (fen[fenIndex] >= '0' && fen[fenIndex] <= '9')
-            {
-                boardIndex += (int)fen[fenIndex] - '0';
-                fenIndex++;
+                file = 0;
+                rank--;
             }
             else
             {
-                fenIndex++;
+                if (char.IsDigit(symbol))
+                {
+                    file += (int)char.GetNumericValue(symbol);
+                }
+                else
+                {
+                    currentPiece |= (char.IsUpper(symbol)) ? Piece.White : Piece.Black;
+                    currentPiece |= piecesValues[char.ToLower(symbol)];
+                    squares[file + 8 * rank] = currentPiece;
+                    file++;
+                }
             }
+
         }
+    }
+
+    public void ExecuteMove(int fromIndex, int toIndex)
+    {
+        // TODO: определить, это обычный ход, или 
+        // // Ракировка 
+        // // EN PASSANT!!!
+        // // Promotion
+
+        // Пока предположим, что это просто обычный ход
+        // И пока без разницы, это взятие или нет
+        squares[toIndex] = squares[fromIndex];
+        squares[fromIndex] = 0;
+
+        // Обновляем чей ход
+        colorToMove = colorToMove ^ 24;
+        
+        // Вызвать метод обновления визуала у BoardRenderer
+        BoardRenderer.Instance.UpdateBoardAfterAMove(fromIndex, toIndex);
     }
 }

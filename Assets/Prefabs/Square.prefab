@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 25598514136853250}
   - component: {fileID: 8535657293572042238}
   - component: {fileID: -7844733311981027833}
+  - component: {fileID: -2369966217859058559}
   m_Layer: 0
   m_Name: Square
   m_TagString: Untagged
@@ -105,3 +106,55 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1f5e78dd6ec60c04fb5e65e7a94e6df7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SquareView
+  position: {x: 0, y: 0}
+  piece: {fileID: 0}
+  material: {fileID: 0}
+  squareIndex: 0
+  selectedMat: {fileID: 2100000, guid: 15f008aadd9a58142a766174c0618988, type: 2}
+  lastMoveSquareMat: {fileID: 2100000, guid: b558fca2c6dc3bc4288853c2fcfc82b0, type: 2}
+--- !u!61 &-2369966217859058559
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7422667002084104213}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 1, y: 1}
+  m_EdgeRadius: 0
