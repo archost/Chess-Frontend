@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SocialPlatforms;
 
 public class GameController : MonoBehaviour
 {
@@ -7,6 +8,10 @@ public class GameController : MonoBehaviour
     private bool _isSelection;
 
     private int _selectedIndex;
+
+    private Move lastMove;
+
+    private Move promMove;  
 
     private void Awake()
     {
@@ -23,6 +28,7 @@ public class GameController : MonoBehaviour
     private void Start()
     {
         _isSelection = true;
+        lastMove = new Move();
     }
 
     void Update()
@@ -30,10 +36,16 @@ public class GameController : MonoBehaviour
         
     }
 
+    public void ProcessRightClick(int squareIndex)
+    {
+        BoardRenderer.Instance.ToggleHighlightSquare(squareIndex);
+    }
+
     public void ProcessClick(int squareIndex)
     {
         int selectedPiece = BoardManager.Instance.squares[squareIndex];
-        
+        MoveGenerator.Instance.GenerateMoves();
+
         if (_isSelection)
         {
             // Если это фигура, и НАШ ХОД
@@ -41,7 +53,16 @@ public class GameController : MonoBehaviour
             {
                 // TODO: Подсветить легальные ходы
 
-                BoardRenderer.Instance.getSquare(squareIndex).SelectSquare(); // TODO: переместить логику подсветки в BoardRenderer
+                // Проверить, легален ли ход
+                foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+                {
+                    if (squareIndex == pseudoLegalMove.startSquare)
+                    {
+                        BoardRenderer.Instance.ShowMoveIsLegal(pseudoLegalMove.targetSquare);
+                    }
+                }
+                BoardRenderer.Instance.RemoveAllHighlighted();
+                BoardRenderer.Instance.SelectSquare(squareIndex);
                 _selectedIndex = squareIndex;
                 _isSelection = false;
             }
@@ -49,29 +70,74 @@ public class GameController : MonoBehaviour
         // Если мы выделили новую фигуру
         else if (selectedPiece != 0)
         {
-            Debug.Log("Selected a NEW PIECE");
             // И если цвет этой фигуры такой же, как и у предыдущей
             if (Piece.IsSameColor(selectedPiece, BoardManager.Instance.squares[_selectedIndex]))
             {
-                Debug.Log("And it's the SAME COLOR");
                 // То нам нужно сбросить выделение с выделенной до этого клетки
-                BoardRenderer.Instance.getSquare(_selectedIndex).ResetSquareColor();
+                BoardRenderer.Instance.ResetSquareColor(_selectedIndex);
+
+                // Сбросить выделение легальных ходов для этой клетки
+                BoardRenderer.Instance.ResetLegalMovesIndication();
 
                 // И сбросить _isSelection в true и вызвать ProcessClick() еще раз
                 _isSelection = true;
-                ProcessClick(squareIndex);
+
+                // Если это НЕ та же самая фигура, то мы выделили новую другую
+                if (squareIndex != _selectedIndex)
+                    ProcessClick(squareIndex);
+                else
+                    BoardRenderer.Instance.RemoveAllHighlighted();
             }
 
             // Если нет, значит мы хотим срубить, но контроллеру это не важно, просто ход
             else
             {
-                MakeAMove(squareIndex);
+                // Проверяем, не превращение ли это
+                if (GetTypeFromPseudolegalMoves(_selectedIndex, squareIndex) == MoveType.Promote)
+                {
+                    // Если это превращение, то нам нужно:
+                    // Вызвать метод у BoardRenderer, который высветит возможные варианты
+                    // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
+                    // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
+                    Debug.Log("prom");
+                    InputManager.Instance.isPromotion = true;
+                    BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
+                    // После этого мы не сможем обрабатывать обычные ходы
+                    // Ну мы и выйдем из этой функции тоже
+                    // Значит нам нужно запомнить, какой ход привел к превращению, чтобы вызвать его потом
+                    promMove = new Move(_selectedIndex, squareIndex, MoveType.Promote);
+
+                }
+                else
+                {
+                    MakeAMove(squareIndex);
+                }
             }
         }
         // Мы выделили пустую клетку и сейчас не выделение, значит мы хотим сделать ход
         else
         {
-            MakeAMove(squareIndex);
+            // Проверяем, не превращение ли это
+            if (GetTypeFromPseudolegalMoves(_selectedIndex, squareIndex) == MoveType.Promote)
+            {
+                    // Если это превращение, то нам нужно:
+                    // Вызвать метод у BoardRenderer, который высветит возможные варианты
+                    // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
+                    // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
+                    Debug.Log("prom");
+                    InputManager.Instance.isPromotion = true;
+                    BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
+                    // После этого мы не сможем обрабатывать обычные ходы
+                    // Ну мы и выйдем из этой функции тоже
+                    // Значит нам нужно запомнить, какой ход привел к превращению, чтобы вызвать его потом
+                    promMove = new Move(_selectedIndex, squareIndex, MoveType.Promote);
+
+            }
+            else
+            {
+                MakeAMove(squareIndex);
+            }
+
         }
     }
 
@@ -79,9 +145,9 @@ public class GameController : MonoBehaviour
     {
         int pieceToMove = BoardManager.Instance.squares[_selectedIndex];
 
-        MoveGenerator.Instance.GenerateMoves();
+        // moved to process click MoveGenerator.Instance.GenerateMoves();
 
-        Move move = new Move(_selectedIndex, squareIndex);
+        Move move = new Move(_selectedIndex, squareIndex, MoveType.Undefined);
         bool legal = false;
 
         // Проверить, легален ли ход
@@ -89,26 +155,88 @@ public class GameController : MonoBehaviour
         {
             if (move.Equals(pseudoLegalMove))
             {
-                Debug.Log("This move is legal!");
+                Debug.Log("This move is legal (kinda)");
+                move = pseudoLegalMove;
                 legal = true;
             }
         }
 
         if (!legal)
         {
-            Debug.Log("This move is ILLEGAL!");
+            Debug.Log("This move is SUPER ILLEGAL");
             return;
         }
 
         // Вызвать метод хода у BoardManager
-        BoardManager.Instance.ExecuteMove(_selectedIndex, squareIndex);
+        BoardManager.Instance.ExecuteMove(move);
         // BoardManager сделает ход
         // // И вызовет у BoardRenderer метод обновления визуала
 
-        // BoardRenderer.Instance.getSquare(squareIndex).SelectSquare();
-        BoardRenderer.Instance.getSquare(_selectedIndex).ResetSquareColor();
+        // Снять красное выделение у всех клеток
+        BoardRenderer.Instance.RemoveAllHighlighted();
+
+        // Снять выделение с предыдущих клеток
+        BoardRenderer.Instance.ResetSquareColor(lastMove.startSquare);
+        BoardRenderer.Instance.ResetSquareColor(lastMove.targetSquare);
+
+        // Сбрасываем выделение легальных ходов
+        BoardRenderer.Instance.ResetLegalMovesIndication();
+
+        BoardRenderer.Instance.SelectSquare(squareIndex);
+        BoardRenderer.Instance.UnselectSquare(_selectedIndex);
         _isSelection = true;
 
-        // Проиграть звук
+        AudioManager.Instance.PlayMoveSound(move.type);
+
+        // Сохраняем последний сделанный ход
+        lastMove = move;
+    }
+
+    public void MakePromotionMove(int squareIndex)
+    {
+        // Сначала определить, какой цвет фигуры, чтобы брать фигуры из соответствующего меню
+        // Это у нас сейчас есть в lastMove
+        // Правда значений фигур у нас нет, надо завести в BoardManager?
+        int[] deck;
+        if (Piece.GetColor(BoardManager.Instance.squares[promMove.startSquare]) == Piece.White)
+            deck = BoardManager.Instance.whitePromotionDeck;
+        else
+            deck = BoardManager.Instance.blackPromotionDeck;
+
+        int pieceType = deck[squareIndex];
+
+        BoardRenderer.Instance.HidePromotionMenu();
+
+        BoardManager.Instance.ExecuteMove(promMove, pieceType);
+
+        // Снять красное выделение у всех клеток
+        BoardRenderer.Instance.RemoveAllHighlighted();
+
+        // Снять выделение с предыдущих клеток
+        BoardRenderer.Instance.ResetSquareColor(lastMove.startSquare);
+        BoardRenderer.Instance.ResetSquareColor(lastMove.targetSquare);
+
+        // Сбрасываем выделение легальных ходов
+        BoardRenderer.Instance.ResetLegalMovesIndication();
+
+        BoardRenderer.Instance.SelectSquare(promMove.targetSquare);
+        BoardRenderer.Instance.UnselectSquare(_selectedIndex);
+
+        lastMove = promMove;
+        _isSelection = true;
+    }
+
+    private MoveType GetTypeFromPseudolegalMoves(int startSquare, int targetSquare)
+    {
+        Move checkingMove = new Move(startSquare, targetSquare, MoveType.Undefined);
+        foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+        {
+            if (checkingMove.Equals(pseudoLegalMove))
+            {
+                return pseudoLegalMove.GetMoveType();
+            }
+        }
+
+        return MoveType.Undefined;
     }
 }

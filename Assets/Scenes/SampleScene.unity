@@ -150,8 +150,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::board
   lightColor: {fileID: 2100000, guid: eeec00a59041c4b44b26a452ef6f88d9, type: 2}
   darkColor: {fileID: 2100000, guid: 1f675107d4f4a3d4d89eb085037428bf, type: 2}
-  squarePrefab: {fileID: 7422667002084104213, guid: 9d53af9f9e2683047a89a262fc07bb3e, type: 3}
+  squarePrefab: {fileID: 7422667002084104213, guid: 8d6f220e590593a40a4d5f8dc793aadb, type: 3}
   piecePrefabsData: {fileID: 11400000, guid: 143672e39de451442a30ca76acc9a29d, type: 2}
+  selectedMat: {fileID: 2100000, guid: 15f008aadd9a58142a766174c0618988, type: 2}
+  lastMoveSquareMat: {fileID: 2100000, guid: b558fca2c6dc3bc4288853c2fcfc82b0, type: 2}
+  legalMoveMaterial: {fileID: 2100000, guid: 4c8eaf3f7530312499687e18571cf535, type: 2}
+  highlightMaterial: {fileID: 2100000, guid: 4988fbd81fc75114381c4e3c1eb0a6f3, type: 2}
+  dimPrefab: {fileID: 5534586856040433955, guid: 953d3eebfbe51dd468cd419b4a7a0f18, type: 3}
 --- !u!4 &320955936
 Transform:
   m_ObjectHideFlags: 0
@@ -342,7 +347,7 @@ Transform:
   m_GameObject: {fileID: 559341671}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.36284, y: -0.76814, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -483,6 +488,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InputManager
   _camera: {fileID: 519420031}
+  isPromotion: 0
 --- !u!4 &724445918
 Transform:
   m_ObjectHideFlags: 0
@@ -492,7 +498,7 @@ Transform:
   m_GameObject: {fileID: 724445916}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.36284, y: -0.76814, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -527,7 +533,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7b2606a93eaf1045b64c8f55e168e1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MoveGenerator
-  DirectionOffsets: 08000000f8ffffffffffffff0100000007000000f9ffffff09000000f7ffffff
 --- !u!4 &1498343551
 Transform:
   m_ObjectHideFlags: 0
@@ -537,7 +542,7 @@ Transform:
   m_GameObject: {fileID: 1498343549}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.36284, y: -0.76814, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -573,8 +578,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoardManager
   squares: 
-  fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+  fen: 7k/3N2qp/b5r1/2p1Q1N1/Pp4PK/7P/1P3p2/6r1 w - - 7 4
+  whitePromotionDeck: 
+  blackPromotionDeck: 
   colorToMove: 8
+  enPassantTargetSquare: -1
+  canWhiteCastleKingside: 1
+  canWhiteCastleQueenside: 1
+  canBlackCastleKingside: 1
+  canBlackCastleQueenside: 1
 --- !u!4 &1726784712
 Transform:
   m_ObjectHideFlags: 0
@@ -584,7 +596,7 @@ Transform:
   m_GameObject: {fileID: 1726784710}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.36284, y: -0.76814, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -720,6 +732,7 @@ MonoBehaviour:
   audioSource: {fileID: 1849710673}
   _moveSound: {fileID: 8300000, guid: 52ad1d3fdb4bae34cb29d56c7e7c62e1, type: 3}
   _captureSound: {fileID: 8300000, guid: ed64a513367ce574fa6deac091e7a33b, type: 3}
+  _castleSound: {fileID: 8300000, guid: 79b485e94235abd448e364e02459e06a, type: 3}
 --- !u!4 &1849710675
 Transform:
   m_ObjectHideFlags: 0
@@ -729,7 +742,7 @@ Transform:
   m_GameObject: {fileID: 1849710672}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.36284, y: -0.76814, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

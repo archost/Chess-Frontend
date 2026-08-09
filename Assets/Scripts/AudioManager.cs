@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 public class AudioManager : MonoBehaviour
@@ -7,6 +8,7 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip _moveSound;
     [SerializeField] private AudioClip _captureSound;
+    [SerializeField] private AudioClip _castleSound;
 
     private void Awake()
     {
@@ -20,15 +22,14 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    public void PlayMoveSound()
+    public void PlayMoveSound(MoveType type)
     {
-        audioSource.clip = _moveSound;
-        audioSource.Play();
-    }
-
-    public void PlayCaptureSound()
-    {
-        audioSource.clip = _captureSound;
+        if (type == MoveType.Take)
+            audioSource.clip = _captureSound;
+        else if (type == MoveType.Castle)
+            audioSource.clip = _castleSound;
+        else
+            audioSource.clip = _moveSound;
         audioSource.Play();
     }
 

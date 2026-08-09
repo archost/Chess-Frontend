@@ -1,3 +1,4 @@
+using NUnit.Framework.Constraints;
 using System;
 using System.Collections;
 using System.Linq;
@@ -14,7 +15,19 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private GameObject squarePrefab;
     [SerializeField] private PiecePrefabsData piecePrefabsData;
 
+    [SerializeField] public Material selectedMat;
+    [SerializeField] public Material lastMoveSquareMat;
+    [SerializeField] public Material legalMoveMaterial;
+    [SerializeField] public Material highlightMaterial;
+
     private GameObject[] squares;
+    private GameObject[] whitePromotionUISquares;
+    private GameObject[] blackPromotionUISquares;
+    private GameObject whitePromotionMenu;
+    private GameObject blackPromotionMenu;
+    private int[] promotionPieces;
+    [SerializeField] private GameObject dimPrefab;
+    private GameObject dim;
 
     private void Awake()
     {
@@ -30,16 +43,98 @@ public class BoardRenderer : MonoBehaviour
 
     void Start()
     {
+        dim = Instantiate(dimPrefab, transform);
         squares = new GameObject[64];
+        whitePromotionUISquares = new GameObject[4];
+        blackPromotionUISquares = new GameObject[4];
+        promotionPieces = new int[4] { Piece.Rook,
+            Piece.Bishop, 
+            Piece.Queen, 
+            Piece.Knight};
         DrawBoard();
         DrawPieces();
+        whitePromotionMenu = CreatePromotionMenu(Piece.White);
+        blackPromotionMenu = CreatePromotionMenu(Piece.Black);
     }
 
     void Update()
     {
 
     }
-    
+
+    public void ToggleHighlightSquare(int index)
+    {
+        GameObject square = squares[index];
+        if (square.GetComponent<SquareView>().isHighlighted)
+        {
+            SetSquareMaterial(index, square.GetComponent<SquareView>().lastMaterial);
+            square.GetComponent<SquareView>().isHighlighted = false;
+        }
+        else
+        {
+            square.GetComponent<SquareView>().lastMaterial = square.GetComponent<SpriteRenderer>().material;
+            square.GetComponent<SpriteRenderer>().material = highlightMaterial;
+            square.GetComponent<SquareView>().isHighlighted = true;
+        }
+    }
+
+    public void RemoveAllHighlighted()
+    {
+        for (int i = 0; i < 64; i++)
+        {
+            GameObject square = squares[i];
+            if (square.GetComponent<SquareView>().isHighlighted)
+            {
+                ResetSquareColor(i);
+                square.GetComponent<SquareView>().isHighlighted = false;
+            }
+        }
+    }
+
+    public void SetSquareMaterial(int index, Material mat)
+    {
+        squares[index].GetComponent<SpriteRenderer>().material = mat;
+    }
+
+    public void SelectSquare(int index)
+    {
+        squares[index].GetComponent<SpriteRenderer>().material = selectedMat;
+    }
+
+    public void UnselectSquare(int index)
+    {
+        squares[index].GetComponent<SpriteRenderer>().material = lastMoveSquareMat;
+    }
+
+    public void ResetSquareColor(int index)
+    {
+        squares[index].GetComponent<SpriteRenderer>().material = squares[index].GetComponent<SquareView>().material;
+    }
+
+    public void ResetAllSquaresColor()
+    {
+        foreach (var square in squares)
+        {
+            square.GetComponent<SpriteRenderer>().material = square.GetComponent<SquareView>().material;
+        }
+    }
+
+    public void ShowMoveIsLegal(int index)
+    {
+        if (BoardManager.Instance.squares[index] != 0)
+            squares[index].GetComponent<SquareView>().captureIndicator.SetActive(true);
+        else
+            squares[index].GetComponent<SquareView>().moveIndicator.SetActive(true);
+    }
+
+    public void ResetLegalMovesIndication()
+    {
+        foreach (var square in squares)
+        {
+            square.GetComponent<SquareView>().captureIndicator.SetActive(false);
+            square.GetComponent<SquareView>().moveIndicator.SetActive(false);
+        }
+    }
 
     public SquareView getSquare(int index)
     {
@@ -83,30 +178,138 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
-    public void UpdateBoardAfterAMove(int fromIndex, int toIndex)
+    public void UpdateBoardAfterAMove(int fromIndex, int toIndex, int piecePromoteTo = 0)
     {
-        // ѕока сделаем обычный ход, из одной клетки в другую
-
         GameObject fromSquare = squares[fromIndex];
         GameObject toSquare = squares[toIndex];
 
         SquareView fromSquareView = fromSquare.GetComponent<SquareView>();
         SquareView toSquareView = toSquare.GetComponent<SquareView>();
-
-        // ≈сли на целевой клетке есть фигура - удалить ее
-        if (toSquareView.piece != null)
+        if (piecePromoteTo != 0)
         {
-            Destroy(toSquareView.piece.gameObject);
+            // ≈сли на целевой клетке есть фигура - удалить ее
+            if (toSquareView.piece != null)
+            {
+                Destroy(toSquareView.piece.gameObject);
+            }
+            Destroy(fromSquareView.piece.gameObject);
+            fromSquareView.piece = null;
+
+            GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
+            toSquareView.piece = instance.GetComponent<PieceView>();
+            instance.GetComponent<PieceView>().square = toSquareView;
+
+        }
+        else
+        {
+            // ≈сли на целевой клетке есть фигура - удалить ее
+            if (toSquareView.piece != null)
+            {
+                Destroy(toSquareView.piece.gameObject);
+            }
+
+            if (fromSquareView.piece != null)
+            {
+                // ”становить текущей фигуре родител€ - целевую клетку
+                fromSquareView.piece.transform.SetParent(toSquare.transform, false);
+
+                // ќбновить значени€ фигур у клеток
+                toSquareView.piece = fromSquareView.piece;
+                fromSquareView.piece = null;
+
+                // ќбновить значение клетки у новой фигуры
+                toSquareView.piece.square = toSquareView;
+            }
+        }
+    }
+
+    private GameObject CreatePromotionMenu(int color)
+    {
+        GameObject menu = new GameObject();
+        menu.transform.SetParent(transform, false);
+
+        int squareIndex = 0;
+        for (int rank = 0; rank < 2; rank++)
+        {
+            for (int file = 0; file < 2; file++)
+            {
+                Material squareMaterial = (file + rank) % 2 != 0 ? lightColor : darkColor;
+
+                GameObject instance = Instantiate(squarePrefab, menu.transform);
+                instance.transform.position = new Vector2(-0.5f + file, -0.5f + rank);
+                instance.GetComponent<SpriteRenderer>().sortingOrder = 2;
+
+                SquareView squareView = instance.GetComponent<SquareView>();
+
+                squareView.position = new Vector2(file, rank);
+                squareView.material = squareMaterial;
+                squareView.squareIndex = squareIndex;
+                if (color == Piece.White)
+                    whitePromotionUISquares[squareIndex++] = instance;
+                else
+                    blackPromotionUISquares[squareIndex++] = instance;
+            }
         }
 
-        // ”становить текущей фигуре родител€ - целевую клетку
-        fromSquareView.piece.transform.SetParent(toSquare.transform, false);
+        DrawPromotionPieces(color);
+        dim.SetActive(false);
+        menu.SetActive(false);
 
-        // ќбновить значени€ фигур у клеток
-        toSquareView.piece = fromSquareView.piece;
-        fromSquareView.piece = null;
+        return menu;
+    }
 
-        // ќбновить значение клетки у новой фигуры
-        toSquareView.piece.square = toSquareView;
+    private void DrawPromotionPieces(int color)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            promotionPieces[i] |= color;
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            int currentPiece = promotionPieces[i];
+            if (currentPiece != 0)
+            {
+                if (color == Piece.White)
+                {
+                    GameObject instance = Instantiate(piecePrefabsData.GetPrefab(currentPiece), whitePromotionUISquares[i].transform);
+                    instance.GetComponent<SpriteRenderer>().sortingOrder = 3;
+                    whitePromotionUISquares[i].GetComponent<SquareView>().piece = instance.GetComponent<PieceView>();
+                    instance.GetComponent<PieceView>().square = whitePromotionUISquares[i].GetComponent<SquareView>();
+                }
+                else
+                {
+                    GameObject instance = Instantiate(piecePrefabsData.GetPrefab(currentPiece), blackPromotionUISquares[i].transform);
+                    instance.GetComponent<SpriteRenderer>().sortingOrder = 3;
+                    blackPromotionUISquares[i].GetComponent<SquareView>().piece = instance.GetComponent<PieceView>();
+                    instance.GetComponent<PieceView>().square = blackPromotionUISquares[i].GetComponent<SquareView>();
+                }
+            }
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            promotionPieces[i] &= 7;
+        }
+    }
+
+    public void ShowPromotionMenu(int color)
+    {
+        dim.SetActive(true);
+        if (color == Piece.White)
+        {
+            whitePromotionMenu.SetActive(true);
+        }
+        else
+        {
+            blackPromotionMenu.SetActive(true);
+        }
+    }
+
+    public void HidePromotionMenu()
+    {
+        dim.SetActive(false);
+        whitePromotionMenu.SetActive(false);
+        blackPromotionMenu.SetActive(false);
     }
 }

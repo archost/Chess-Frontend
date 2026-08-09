@@ -6,24 +6,30 @@ using UnityEngine;
 
 public enum MoveType
 {
+    Undefined,
     Move, 
     Take,
     Castle,
-    Promote
+    Promote,
+    EnPassant
 }
 
 public struct Move
 {
     public int startSquare;
     public int targetSquare;
+    public MoveType type;
 
-    public Move(int startSquare, int targetSquare)
+    public Move(int startSquare, int targetSquare, MoveType type)
     {
         this.startSquare = startSquare;
         this.targetSquare = targetSquare;
+        this.type = type;
     }
 
     public bool Equals(Move other) => startSquare == other.startSquare && targetSquare == other.targetSquare;
+
+    public MoveType GetMoveType() => type;
 }
 
 public class MoveGenerator : MonoBehaviour
@@ -93,7 +99,7 @@ public class MoveGenerator : MonoBehaviour
             int rank = square / 8;
             int file = square % 8;
 
-            List<int> validMoves = new List<int>();
+            List<int> pseudoValidMovesForASquare = new List<int>();
 
             for (int i = 0; i < 8; i++)
             {
@@ -103,11 +109,11 @@ public class MoveGenerator : MonoBehaviour
                 if (newRank >= 0 && newRank < 8 && newFile >= 0 && newFile < 8)
                 {
                     int targetSquare = newRank * 8 + newFile;
-                    validMoves.Add(targetSquare);
+                    pseudoValidMovesForASquare.Add(targetSquare);
                 }
             }
 
-            knightMoves[square] = validMoves.ToArray();
+            knightMoves[square] = pseudoValidMovesForASquare.ToArray();
         }
     }
     
@@ -151,13 +157,21 @@ public class MoveGenerator : MonoBehaviour
                 int targetSquare = startSquare + directionOffsets[directionIndex] * (n + 1);
                 int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
 
+                MoveType moveType = MoveType.Move;
+
+                // Проверим, берем ли мы фигуру, совершая этот ход
+                if (pieceOnTargetSquare != 0)
+                {
+                    moveType = MoveType.Take;
+                }
+
                 // Blocked by friendly piece, so can't move any further in this direction
                 if (Piece.IsSameColor(pieceOnTargetSquare, piece))
                 {
                     break;
                 }
 
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType));
 
                 // Can't move any further in this direction after capturing opponent's piece
                 int opponentColor = piece ^ 24;
@@ -178,9 +192,14 @@ public class MoveGenerator : MonoBehaviour
             int targetSquare = targets[i];
             int pieceOnTarget = BoardManager.Instance.squares[targetSquare];
 
+            MoveType moveType = MoveType.Move;
+
             if (!Piece.IsSameColor(pieceOnTarget, piece))
             {
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+                if (pieceOnTarget != 0)
+                    moveType = MoveType.Take;
+
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType));
             }
         }
     }
@@ -196,12 +215,69 @@ public class MoveGenerator : MonoBehaviour
                 int targetSquare = startSquare + directionOffsets[directionIndex];
                 int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
 
+                MoveType moveType = MoveType.Move;
+
                 if (Piece.IsSameColor(pieceOnTargetSquare, piece))
                 {
                     continue;
                 }
 
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+                if (pieceOnTargetSquare != 0)
+                    moveType = MoveType.Take;
+
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType));
+            }
+        }
+
+        // Рокировка
+        // По сути мы всегда нажимаем на 2 и 6 за белых, и 58 и 62 за черных (0-0-0 и 0-0 соответственно)
+        // Нужно ли нам прямо здесь проверять, можно ли рокироваться?
+        // Хотя бы по флагу? Да
+        // По шаху? Пока непонятно
+
+        // Рокировка разрешена, если:
+        // - Ни король, ни ладья до этого не двигались * проверить флаг из BoardManager
+        // - Нет никаких фигур между королем и ладьей ** эту проверку нужно выполнить здесь
+        // - !Король в данный момент не находится под шахом
+        // - !Король не будет находиться под шахом после рокировки
+
+        // 0-0-0 для белых
+        if (BoardManager.Instance.canWhiteCastleQueenside && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+        {
+            // Индексы 1, 2 и 3 - пустые
+            if (BoardManager.Instance.squares[1] == 0 &&
+                BoardManager.Instance.squares[2] == 0 &&
+                BoardManager.Instance.squares[3] == 0)
+            {
+                pseudoLegalMoves.Add(new Move(4, 2, MoveType.Castle));
+            }
+        }
+        // 0-0 для белых
+        if (BoardManager.Instance.canWhiteCastleKingside && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+        {
+            if (BoardManager.Instance.squares[5] == 0 &&
+                BoardManager.Instance.squares[6] == 0)
+            {
+                pseudoLegalMoves.Add(new Move(4, 6, MoveType.Castle));
+            }
+        }
+        // 0-0-0 для черных
+        if (BoardManager.Instance.canBlackCastleQueenside && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
+        {
+            if (BoardManager.Instance.squares[57] == 0 &&
+                BoardManager.Instance.squares[58] == 0 &&
+                BoardManager.Instance.squares[59] == 0)
+            {
+                pseudoLegalMoves.Add(new Move(60, 58, MoveType.Castle));
+            }
+        }
+        // 0-0 для черных
+        if (BoardManager.Instance.canBlackCastleKingside && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
+        {
+            if (BoardManager.Instance.squares[61] == 0 &&
+                BoardManager.Instance.squares[62] == 0)
+            {
+                pseudoLegalMoves.Add(new Move(60, 62, MoveType.Castle));
             }
         }
     }
@@ -211,9 +287,17 @@ public class MoveGenerator : MonoBehaviour
         int direction = Piece.GetColor(piece) == Piece.White ? 8 : -8;
         // Ход на 1 клетку
         int targetSquare = startSquare + direction;
-        if (BoardManager.Instance.squares[targetSquare] == Piece.None)
+        if (targetSquare >= 0 && targetSquare < 64 && 
+            BoardManager.Instance.squares[targetSquare] == Piece.None)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
+            {
+                // Promotion
+                Debug.Log("Move " + startSquare + " to " + targetSquare + " is a promotion move!");
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote));
+            }
+            else
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Move));
         }
 
         // Ход на 2 клетки
@@ -221,22 +305,55 @@ public class MoveGenerator : MonoBehaviour
             ((Piece.GetColor(piece) == Piece.Black) && (startSquare / 8 == 6));
 
         targetSquare = startSquare + direction * 2;
-        if (isPawnOnStartingPos && BoardManager.Instance.squares[targetSquare] == Piece.None)
+        if (targetSquare >= 0 && targetSquare < 64 && isPawnOnStartingPos && 
+            BoardManager.Instance.squares[targetSquare] == Piece.None &&
+            BoardManager.Instance.squares[startSquare + direction] == Piece.None)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Move));
         }
 
-        // Взятие (нужно проверить две клетки по диагонали)
+        // Взятие + на проходе (нужно проверить две клетки по диагонали)
         targetSquare = startSquare + direction + 1;
-        if (BoardManager.Instance.squares[targetSquare] != Piece.None)
+        if (targetSquare >= 0 && targetSquare < 64)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            if (BoardManager.Instance.squares[targetSquare] != Piece.None &&
+                !Piece.IsSameColor(BoardManager.Instance.squares[targetSquare], piece))
+            {
+                if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
+                {
+                    // Promotion
+                    Debug.Log("Move " + startSquare + " to " + targetSquare + " is a promotion move!");
+                    pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote));
+                }
+                else
+                    pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Take));
+            }
+            else if (targetSquare == BoardManager.Instance.enPassantTargetSquare)
+            {
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.EnPassant));
+            }
         }
 
         targetSquare = startSquare + direction - 1;
-        if (BoardManager.Instance.squares[targetSquare] != Piece.None)
+        if (targetSquare >= 0 && targetSquare < 64)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare));
+            if (BoardManager.Instance.squares[targetSquare] != Piece.None &&
+            !Piece.IsSameColor(BoardManager.Instance.squares[targetSquare], piece))
+            {
+                if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
+                {
+                    // Promotion
+                    Debug.Log("Move " + startSquare + " to " + targetSquare + " is a promotion move!");
+                    pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote));
+                }
+                else
+                    pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Take));
+            }
+            else if (targetSquare == BoardManager.Instance.enPassantTargetSquare)
+            {
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.EnPassant));
+            }
         }
+
     }
 }
