@@ -48,9 +48,11 @@ public class GameController : MonoBehaviour
 
         if (_isSelection)
         {
+            Debug.Log("Selected piece = " + selectedPiece);
             // Если это фигура, и НАШ ХОД
             if (selectedPiece != 0 && Piece.GetColor(selectedPiece) == BoardManager.Instance.colorToMove)
             {
+                Debug.Log("Это фигура, и это наш ход");
                 // TODO: Подсветить легальные ходы
 
                 // Проверить, легален ли ход
@@ -70,6 +72,7 @@ public class GameController : MonoBehaviour
         // Если мы выделили новую фигуру
         else if (selectedPiece != 0)
         {
+            Debug.Log("Выделяем новую фигуру");
             // И если цвет этой фигуры такой же, как и у предыдущей
             if (Piece.IsSameColor(selectedPiece, BoardManager.Instance.squares[_selectedIndex]))
             {
@@ -107,6 +110,14 @@ public class GameController : MonoBehaviour
                     // Значит нам нужно запомнить, какой ход привел к превращению, чтобы вызвать его потом
                     promMove = new Move(_selectedIndex, squareIndex, MoveType.Promote);
 
+                    foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+                    {
+                        if (promMove.Equals(pseudoLegalMove))
+                        {
+                            Debug.Log("This move is legal (kinda)");
+                            promMove = pseudoLegalMove;
+                        }
+                    }
                 }
                 else
                 {
@@ -120,17 +131,26 @@ public class GameController : MonoBehaviour
             // Проверяем, не превращение ли это
             if (GetTypeFromPseudolegalMoves(_selectedIndex, squareIndex) == MoveType.Promote)
             {
-                    // Если это превращение, то нам нужно:
-                    // Вызвать метод у BoardRenderer, который высветит возможные варианты
-                    // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
-                    // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
-                    Debug.Log("prom");
-                    InputManager.Instance.isPromotion = true;
-                    BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
-                    // После этого мы не сможем обрабатывать обычные ходы
-                    // Ну мы и выйдем из этой функции тоже
-                    // Значит нам нужно запомнить, какой ход привел к превращению, чтобы вызвать его потом
-                    promMove = new Move(_selectedIndex, squareIndex, MoveType.Promote);
+                // Если это превращение, то нам нужно:
+                // Вызвать метод у BoardRenderer, который высветит возможные варианты
+                // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
+                // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
+                Debug.Log("prom");
+                InputManager.Instance.isPromotion = true;
+                BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
+                // После этого мы не сможем обрабатывать обычные ходы
+                // Ну мы и выйдем из этой функции тоже
+                // Значит нам нужно запомнить, какой ход привел к превращению, чтобы вызвать его потом
+                promMove = new Move(_selectedIndex, squareIndex, MoveType.Promote);
+
+                foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+                {
+                    if (promMove.Equals(pseudoLegalMove))
+                    {
+                        Debug.Log("This move is legal (kinda)");
+                        promMove = pseudoLegalMove;
+                    }
+                }
 
             }
             else
@@ -168,7 +188,7 @@ public class GameController : MonoBehaviour
         }
 
         // Вызвать метод хода у BoardManager
-        BoardManager.Instance.ExecuteMove(move);
+        BoardManager.Instance.ProcessMove(move);
         // BoardManager сделает ход
         // // И вызовет у BoardRenderer метод обновления визуала
 
@@ -207,7 +227,7 @@ public class GameController : MonoBehaviour
 
         BoardRenderer.Instance.HidePromotionMenu();
 
-        BoardManager.Instance.ExecuteMove(promMove, pieceType);
+        BoardManager.Instance.ProcessMove(promMove, pieceType);
 
         // Снять красное выделение у всех клеток
         BoardRenderer.Instance.RemoveAllHighlighted();
@@ -222,6 +242,8 @@ public class GameController : MonoBehaviour
         BoardRenderer.Instance.SelectSquare(promMove.targetSquare);
         BoardRenderer.Instance.UnselectSquare(_selectedIndex);
 
+        AudioManager.Instance.PlayMoveSound(MoveType.Promote);
+
         lastMove = promMove;
         _isSelection = true;
     }
@@ -233,10 +255,17 @@ public class GameController : MonoBehaviour
         {
             if (checkingMove.Equals(pseudoLegalMove))
             {
-                return pseudoLegalMove.GetMoveType();
+                return pseudoLegalMove.type;
             }
         }
 
         return MoveType.Undefined;
+    }
+
+    public void UndoMove()
+    {
+        _selectedIndex = -1;
+        _isSelection = true;
+        BoardManager.Instance.UndoMove();
     }
 }

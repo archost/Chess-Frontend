@@ -9,6 +9,7 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioClip _moveSound;
     [SerializeField] private AudioClip _captureSound;
     [SerializeField] private AudioClip _castleSound;
+    [SerializeField] private AudioClip _promotionSound;
 
     private void Awake()
     {
@@ -24,12 +25,24 @@ public class AudioManager : MonoBehaviour
 
     public void PlayMoveSound(MoveType type)
     {
-        if (type == MoveType.Take)
-            audioSource.clip = _captureSound;
-        else if (type == MoveType.Castle)
-            audioSource.clip = _castleSound;
-        else
-            audioSource.clip = _moveSound;
+        switch (type)
+        {
+            case MoveType.Take:
+                audioSource.clip = _captureSound;
+                break;
+            case MoveType.Castle:
+                audioSource.clip = _castleSound;
+                break;
+            case MoveType.Promote:
+                audioSource.clip = _promotionSound;
+                break;
+            case MoveType.EnPassant:
+                audioSource.clip = _captureSound;
+                break;
+            default:
+                audioSource.clip = _moveSound;
+                break;
+        }
         audioSource.Play();
     }
 
