@@ -2,58 +2,54 @@ using UnityEngine;
 
 public class InputManager : MonoBehaviour
 {
+    public static InputManager Instance;
     [SerializeField] private Camera _camera;
 
     private SquareView _selectedSquare;
+    public bool isPromotion = false;
 
-    void Start()
+    private void Awake()
     {
-        
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
         {
-            ProcessClick();
+            ProcessClick(0);
+        }
+        else if (Input.GetMouseButtonDown(1))
+        {
+            ProcessClick(1);
         }
     }
 
-    private void ProcessClick()
+    private void ProcessClick(int mouseButton)
     {
         RaycastHit2D rayHit = Physics2D.GetRayIntersection(Camera.main.ScreenPointToRay(Input.mousePosition));
-        if (rayHit.transform.TryGetComponent<SquareView>(out _selectedSquare))
+        if (rayHit.transform != null && rayHit.transform.TryGetComponent<SquareView>(out _selectedSquare))
         {
-            GameController.Instance.ProcessClick(_selectedSquare.squareIndex);
-            /*
-            if (_fromSquare != null && _toSquare != null && _fromSquare != _selectedSquare)
+            if (!isPromotion)
             {
-                _fromSquare.ResetSquareColor();
-                _toSquare.ResetSquareColor();
+                if (mouseButton == 0)
+                    GameController.Instance.ProcessClick(_selectedSquare.squareIndex);
+                if (mouseButton == 1)
+                    GameController.Instance.ProcessRightClick(_selectedSquare.squareIndex);
             }
-            if (_isSelection)
+            else if (_selectedSquare.gameObject.GetComponent<SpriteRenderer>().sortingOrder == 2)
             {
-                _selectedPiece = _selectedSquare.GetComponentInChildren<PieceView>();
-                if (_selectedPiece != null)
-                {
-                    if (Piece.IsColor(_selectedPiece.pieceType, BoardManager.Instance.colorToMove))
-                    {
-                        Debug.Log("Found a piece");
-                        _fromSquare = _selectedSquare;
-                        _fromSquare.SelectSquare();
-                        _isSelection = false;
-                    }
-                }
+                // Нам нужно, чтобы он обрабатывал только клики на promotionMenu. Пока определяю с помощью sortingOrder
+                GameController.Instance.MakePromotionMove(_selectedSquare.squareIndex);
+                isPromotion = false;
             }
-            else if (_fromSquare != _selectedSquare)
-            {
-                _toSquare = _selectedSquare;
-                _fromSquare.UnselectSquare(_toSquare);
-                _fromSquare.MoveTo(_toSquare);
-                _isSelection = true;
-            }
-            */
         }
     }
-
 }

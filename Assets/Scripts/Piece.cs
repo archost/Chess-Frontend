@@ -1,7 +1,3 @@
-using System.Runtime.CompilerServices;
-using UnityEditor.PackageManager;
-using UnityEngine;
-
 public static class Piece
 {
     public const int None = 0;
@@ -33,5 +29,10 @@ public static class Piece
     public static bool IsSameColor(int piece1, int piece2)
     {
         return GetColor(piece1) == GetColor(piece2);
+    }
+
+    public static int GetReversedColor(int piece)
+    {
+        return (piece ^ 24) & 24;
     }
 }
