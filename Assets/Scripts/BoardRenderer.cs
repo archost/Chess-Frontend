@@ -183,125 +183,143 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
-    public void UpdateBoardAfterAMove(int fromIndex, int toIndex, int piecePromoteTo = 0, int capturedPiece = 0, bool enPassant = false)
+    public void UpdateBoardAfterAMove(Move move, int piecePromoteTo, bool undo = false)
     {
-        GameObject fromSquare = squares[fromIndex];
-        GameObject toSquare = squares[toIndex];
+        GameObject fromSquare = squares[move.startSquare];
+        GameObject toSquare = squares[move.targetSquare];
 
         SquareView fromSquareView = fromSquare.GetComponent<SquareView>();
         SquareView toSquareView = toSquare.GetComponent<SquareView>();
-        if (piecePromoteTo != 0 && piecePromoteTo != -1)
+
+        GameObject enpassantSquare = null;
+        SquareView enPassantSquareView = null;
+
+        if (move.enPassantTargetPawnSquare != -1)
         {
-            Debug.Log("promotion");
-            // Если на целевой клетке есть фигура - удалить ее
+            enpassantSquare = squares[move.enPassantTargetPawnSquare];
+            enPassantSquareView = enpassantSquare.GetComponent<SquareView>();
+        }
+
+        if (!undo)
+        {
+            if (move.type == MoveType.EnPassant)
+            {
+                // Если это en passant, то вот эта ветка будет вместо взятия
+                // Точно также на клетке пешки, которую берут на проход, выключаем фигуру
+                enPassantSquareView.piece.gameObject.SetActive(false);
+                // И обнуляем ну этой клетки ссылку на фигуру
+                enPassantSquareView.piece = null;
+            }
             if (toSquareView.piece != null)
             {
-                // Destroy(toSquareView.piece.gameObject);
+                // Если на целевой клетке есть фигура - выключить ее
                 toSquareView.piece.gameObject.SetActive(false);
+                // Обнулить ссылку на фигуру у целевой клетки
+                toSquareView.piece = null;
             }
-            // Destroy(fromSquareView.piece.gameObject);
-            fromSquareView.piece.gameObject.SetActive(false);
-            fromSquareView.piece = null;
-
-            GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
-            toSquareView.piece = instance.GetComponent<PieceView>();
-            instance.GetComponent<PieceView>().square = toSquareView;
-            pieces.Add(instance);
-
-        }
-        else if (piecePromoteTo == -1)
-        {
-            Debug.Log("Undo promotion");
-            // Отмена превращения
-
-            // Находим пешку
-            // Проблема в том, что это единственный ход, при котором фигура после него исчезает
-            // Так что мы не храним нигде информацию о том, что это за фигура
-            // Поэтому мы не знаем, какой у нее цвет, можно выполнить поиск дважды?
-            int promotedPawnIndex = FindPiece(Piece.Pawn | Piece.White, toSquareView);
-            if (promotedPawnIndex == -1)
-                promotedPawnIndex = FindPiece(Piece.Pawn | Piece.Black, toSquareView);
-            // Включаем пешку и устанавливаем этой клетке ссылку на нее
-            pieces[promotedPawnIndex].SetActive(true);
-            toSquareView.piece = pieces[promotedPawnIndex].GetComponent<PieceView>();
-
-            // Нам нужно уничтожить объект фигуры, в которую пешка превратилась
-            // И обнулить у fromSquare ссылку на фигуру
-            
-            Destroy(fromSquareView.piece.gameObject);
-            fromSquareView.piece = null;
-
-            // Также нужно иметь в виду, что превращение могло быть после взятия
-            // В этом случае нам нужно:
-            // Найти фигуру, которая была съедена
-            // Включить ее
-            // Установить fromSquare ссылку на нее
-            if (capturedPiece != 0)
+            if (fromSquareView.piece != null)
             {
-                int capturedPieceIndex = FindPiece(capturedPiece, fromSquareView);
-                Debug.Log("Фигура, которую мы пытаемся восстановить: " +  capturedPieceIndex);
-                pieces[capturedPieceIndex].SetActive(true);
-                fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
-            }
-            
-        }
-        else
-        {
-            // Это значит, что это обратное взятие
-            if (capturedPiece != 0)
-            {
-                Debug.Log("Undo take");
-                // Найти в пуле фигур нужную фигуру на стартовой клетке
-                int capturedPieceIndex = FindPiece(capturedPiece, fromSquareView);
-                // У нее сохранилось значение поля square, она принадлежит ему, менять ничего не нужно
-                // Нужно только установить значение fromSquareView - piece - эта фигура
-                if (capturedPieceIndex != -1)
+                if (move.type == MoveType.Promote)
                 {
-                    pieces[capturedPieceIndex].SetActive(true);
-                    if (enPassant)
-                        fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
+                    // Если это превращение, то на целевой клетке нужно создать новую фигуру
+                    // А не перемещать туда фигуру из стартовой клетки
+                    GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
+                    toSquareView.piece = instance.GetComponent<PieceView>();
+                    instance.GetComponent<PieceView>().square = toSquareView;
+                    pieces.Add(instance);
+
+                    // А фигура на стартовой клетке выключается
+                    // И PieceView стартовой клетки обнуляется
+                    fromSquareView.piece.gameObject.SetActive(false);
+                    fromSquareView.piece = null;
                 }
                 else
-                    Debug.Log("It is -1 indeed");
-
-                if (fromSquareView.piece != null && !enPassant)
                 {
                     // Установить текущей фигуре - родителя - целевую клетку
                     fromSquareView.piece.transform.SetParent(toSquare.transform, false);
-
                     // Целевой клетке присваивается PieceView стартовой
                     toSquareView.piece = fromSquareView.piece;
-
-                    // У стартовой клетки PieceView должен стать PieceView включенной фигуры
-                    fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
-
-                    // Обновить значение клетки у новой фигуры
+                    // Обновить значение клетки у фигуры
                     toSquareView.piece.square = toSquareView;
+
+                    // PieceView стартовой клетки обнуляется
+                    fromSquareView.piece = null;
+                }
+            }
+        }
+        else
+        {
+            if (move.type != MoveType.Promote)
+            {
+                if (fromSquareView.piece != null)
+                {
+                    // Сначала двинем обратно фигуру
+
+                    // Установить текущей фигуре - родителя - целевую клетку
+                    fromSquareView.piece.transform.SetParent(toSquare.transform, false);
+                    // Целевой клетке присваивается PieceView стартовой
+                    toSquareView.piece = fromSquareView.piece;
+                    // Обновить значение клетки у фигуры
+                    toSquareView.piece.square = toSquareView;
+
+                    // PieceView стартовой клетки обнуляется
+                    fromSquareView.piece = null;
+                }
+                if (move.capturedPiece != 0)
+                {
+                    // Это значит, что этим ходом нам нужно возродить эту capturedPiece
+                    // То есть включить ее, и у клетки fromSquare установить ссылку на нее
+                    // Правда ее сначала нужно найти в массиве фигур
+
+                    if (move.type == MoveType.EnPassant)
+                    {
+                        // Если это был en passant, то включаем пешку на enpassantSquare
+                        int capturedPieceIndex = FindPiece(move.capturedPiece, enPassantSquareView);
+
+                        pieces[capturedPieceIndex].gameObject.SetActive(true);
+                        enPassantSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
+                    }
+                    else
+                    {
+                        // Если это был обычный ход со взятием, то мы включаем фигуру там, откуда мы уходим
+                        int capturedPieceIndex = FindPiece(move.capturedPiece, fromSquareView);
+
+                        pieces[capturedPieceIndex].gameObject.SetActive(true);
+                        fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
+                    }
                 }
             }
             else
             {
-                // Если на целевой клетке есть фигура - выключить ее
-                if (toSquareView.piece != null)
+                // Отмена превращения
+                // Находим пешку, которая до этого просто пропала
+                // Мы не знаем, какой у нее цвет, потому что не храним эту информацию в Move
+                // Поэтому поиск нужно выполнить дваджы
+                int promotedPawnIndex = FindPiece(Piece.Pawn | Piece.White, toSquareView);
+                if (promotedPawnIndex == -1)
+                    promotedPawnIndex = FindPiece(Piece.Pawn | Piece.Black, toSquareView);
+                pieces[promotedPawnIndex].SetActive(true);
+                toSquareView.piece = pieces[promotedPawnIndex].GetComponent<PieceView>();
+
+                // Нам нужно уничтожить объект фигуры, в которую пешка превратилась
+                // И обнулить у fromSquare ссылку на фигуру
+                pieces.Remove(fromSquareView.piece.gameObject); // Исправление бага - после удаления ссылка на фигуру все еще лежит в pieces
+                Destroy(fromSquareView.piece.gameObject);
+                fromSquareView.piece = null;
+
+                // Также нужно иметь в виду, что превращение могло быть после взятия
+                // В этом случае нам нужно:
+                // Найти фигуру, которая была съедена
+                // Включить ее
+                // Установить fromSquare ссылку на нее
+                if (move.capturedPiece != 0)
                 {
-                    toSquareView.piece.gameObject.SetActive(false);
-                    toSquareView.piece = null;
-                }
-
-                if (fromSquareView.piece != null)
-                {
-                    // Установить текущей фигуре - родителя - целевую клетку
-                    fromSquareView.piece.transform.SetParent(toSquare.transform, false);
-
-                    // Целевой клетке присваивается PieceView стартовой
-                    toSquareView.piece = fromSquareView.piece;
-                    // PieceView стартовой клетки обнуляется
-                    fromSquareView.piece = null;
-
-                    // Обновить значение клетки у новой фигуры
-                    toSquareView.piece.square = toSquareView;
+                    int capturedPieceIndex = FindPiece(move.capturedPiece, fromSquareView);
+                    pieces[capturedPieceIndex].SetActive(true);
+                    fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
                 }
             }
+            
         }
     }
 
@@ -309,8 +327,7 @@ public class BoardRenderer : MonoBehaviour
     {
         for (int i = 0; i < pieces.Count; i++)
         {
-            if (pieces[i].GetComponent<PieceView>().pieceType == piece &&
-                pieces[i].GetComponent<PieceView>().square == square)
+            if (pieces[i].GetComponent<PieceView>().pieceType == piece && pieces[i].GetComponent<PieceView>().square == square)
             {
                 return i;
             }

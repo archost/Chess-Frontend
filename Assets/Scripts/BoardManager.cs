@@ -32,7 +32,7 @@ public class BoardManager : MonoBehaviour
             Instance = this;
             squares = new int[64];
             moveHistory = new Stack<Move>();
-            FenToBoard(); 
+            FenToBoard();
             InitializePromotionDecks();
             InitializeCastlingMasks();
         }
@@ -55,7 +55,7 @@ public class BoardManager : MonoBehaviour
 
     private void InitializePromotionDecks()
     {
-        whitePromotionDeck = new int[4]{ 
+        whitePromotionDeck = new int[4]{
             Piece.Rook | Piece.White,
             Piece.Bishop | Piece.White,
             Piece.Queen | Piece.White,
@@ -112,131 +112,104 @@ public class BoardManager : MonoBehaviour
         }
     }
 
-    public void ProcessMove(Move move, int piecePromoteTo = Piece.None)
+    public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None)
     {
         enPassantTargetSquare = -1;
 
         int fromIndex = move.startSquare;
         int toIndex = move.targetSquare;
-
         int pieceToMove = squares[fromIndex];
-        int pieceToCapture = squares[toIndex];
+        Move lastMove = new Move();
 
-        // Обычный ход
-        if (move.type == MoveType.Move)
+        if (undo)
         {
-            ExecuteMove(fromIndex, toIndex);
+            if (moveHistory.Count == 0)
+                return;
+            lastMove = moveHistory.Pop();
+            move = lastMove.ReverseMove(); // move = reversedMove
         }
 
-        // Превращение - отдельный ход, а не дополнение к ходу "ход"
-        if (move.type == MoveType.Promote)
-        {
-            ExecuteMove(fromIndex, toIndex, piecePromoteTo);
-        }
-
-        // Взятие
-        if (move.type == MoveType.Take)
-        {
-            ExecuteMove(fromIndex, toIndex);
-        }
-
-        // Рокировка
-        if (move.type == MoveType.Castle)
-        {
-            // Ход королем
-            ExecuteMove(fromIndex, toIndex);
-
-            // Ход ладьей
-            ExecuteMove(move.castlingRookStartSquare, move.castlingRookTargetSquare);
-        }
-
-        // En passant
-        if ((move.type == MoveType.EnPassant))
-        {
-            ExecuteMove(fromIndex, toIndex);
-            ExecuteMove(fromIndex, move.enPassantTargetPawnSquare);
-        }
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Проверяем, был ли сделан ход пешкой на две клетки, чтобы выставить enPassantTargetSquare
-        if (Piece.GetType(pieceToMove) == Piece.Pawn && Math.Abs(fromIndex / 8 - toIndex / 8) == 2)
-        {
-            enPassantTargetSquare = Piece.GetColor(pieceToMove) == Piece.White ? toIndex - 8 : toIndex + 8;
-        }
-
-        move.previousCastlingRights = castlingRights;
-
-        // Обновление маски флагов рокировки
-        castlingRights &= ~(castlingRightsMask[fromIndex] | castlingRightsMask[toIndex]);
-
-        // Обновляем чей ход
-        colorToMove = Piece.GetReversedColor(colorToMove);
-
-        Debug.Log("Добавляю в историю ход, у которого взятая фигура " + move.capturedPiece);
-        moveHistory.Push(move);
-    }
-
-    private void ExecuteMove(int fromIndex, int toIndex, int piecePromoteTo = 0, int capturedPiece = 0, bool enPassant = false)
-    {
-        if (piecePromoteTo == -1)
-        {
-            // То это отмена превращения
-            // А КАК БЛЯТЬ ОТМЕНЯТЬ ПРЕВРАЩЕНИЕ ЕСЛИ ПЕШКА ПРОСТО ПРОПАДАЕТ И ВСЕ БЛЯТЬ Я НЕ ЗНАЮ НИХУЯ НЕ ПОНИМАЮ СУКА Я НЕ МОГУ
-            // Может вообще хранить превращенную пешку в capturedPiece? Нет, потому что в capturedPiece будет фигура, которую мы взяли, когда превращались
-            // Найти цвет фигуры, в которую пешка превратилась:
-            int promotedPieceColor = Piece.GetColor(squares[fromIndex]);
-            int pawn = Piece.Pawn | promotedPieceColor;
-
-            squares[toIndex] = pawn;
-            squares[fromIndex] = capturedPiece == 0 ? 0 : capturedPiece;
-        }
-        else
-        {
-            squares[toIndex] = piecePromoteTo == 0 ? squares[fromIndex] : piecePromoteTo;
-            squares[fromIndex] = capturedPiece == 0 ? 0 : capturedPiece;
-        }
-
-        BoardRenderer.Instance.UpdateBoardAfterAMove(fromIndex, toIndex, piecePromoteTo, capturedPiece, enPassant);
-    }
-
-    public void UndoMove()
-    {
-        if (moveHistory.Count == 0)
-            return;
-        Move lastMove = moveHistory.Pop();
-
-        Debug.Log("Undoing move: " + lastMove.startSquare + " to " + lastMove.targetSquare);
-
-        switch (lastMove.type)
+        switch (move.type)
         {
             case MoveType.Move:
-                ExecuteMove(lastMove.targetSquare, lastMove.startSquare);
+                ExecuteMove(move, undo);
                 break;
             case MoveType.Take:
-                ExecuteMove(lastMove.targetSquare, lastMove.startSquare, 0, lastMove.capturedPiece);
+                ExecuteMove(move, undo);
                 break;
             case MoveType.Castle:
-                ExecuteMove(lastMove.targetSquare, lastMove.startSquare);
-                ExecuteMove(lastMove.castlingRookTargetSquare, lastMove.castlingRookStartSquare);
+                ExecuteMove(move, undo);
+                Move rookCastlingMove = new Move(move.castlingRookStartSquare, move.castlingRookTargetSquare, MoveType.Move);
+                ExecuteMove(rookCastlingMove, undo);
                 break;
             case MoveType.EnPassant:
-                Debug.Log("Captured piece = " + lastMove.capturedPiece);
-                ExecuteMove(lastMove.enPassantTargetPawnSquare, lastMove.startSquare, 0, lastMove.capturedPiece, true);
-                ExecuteMove(lastMove.targetSquare, lastMove.startSquare);
+                ExecuteMove(move, undo);
                 break;
             case MoveType.Promote:
-                Debug.Log("У последнего хода превращения взятая фигура была " + lastMove.capturedPiece);
-                ExecuteMove(lastMove.targetSquare, lastMove.startSquare, -1, lastMove.capturedPiece);
+                ExecuteMove(move, undo, piecePromoteTo);
                 break;
             default:
                 Debug.Log("How did we get here?");
                 break;
         }
 
-        // Обновление маски флагов рокировки (не работает)
-        castlingRights = lastMove.previousCastlingRights;
+        //// Обновление правил доски
 
+        if (undo)
+        {
+            castlingRights = lastMove.previousCastlingRights;
+        }
+        else
+        {
+            // Проверяем, был ли сделан ход пешкой на две клетки, чтобы выставить enPassantTargetSquare
+            if (Piece.GetType(pieceToMove) == Piece.Pawn && Math.Abs(fromIndex / 8 - toIndex / 8) == 2)
+            {
+                enPassantTargetSquare = Piece.GetColor(pieceToMove) == Piece.White ? toIndex - 8 : toIndex + 8;
+            }
+
+            move.previousCastlingRights = castlingRights;
+
+            // Обновление маски флагов рокировки
+            castlingRights &= ~(castlingRightsMask[fromIndex] | castlingRightsMask[toIndex]);
+
+            moveHistory.Push(move);
+        }
+
+        // Обновляем чей ход
         colorToMove = Piece.GetReversedColor(colorToMove);
+    }
+
+    private void ExecuteMove(Move move, bool undo, int piecePromoteTo = Piece.None)
+    {
+        // int fromIndex, int toIndex, int piecePromoteTo = 0, int capturedPiece = 0, bool enPassant = false
+        int fromIndex = move.startSquare;
+        int toIndex = move.targetSquare;
+        int capturedPiece = move.capturedPiece;
+
+        if (!undo)
+        {
+            squares[toIndex] = move.type == MoveType.Promote ? piecePromoteTo : squares[fromIndex];
+            squares[fromIndex] = 0;
+            if (move.type == MoveType.EnPassant)
+            {
+                squares[move.enPassantTargetPawnSquare] = 0;
+            }
+            BoardRenderer.Instance.UpdateBoardAfterAMove(move, piecePromoteTo);
+        }
+        else
+        {
+            // Обратные ходы
+            int promotedPieceColor = Piece.GetColor(squares[fromIndex]);
+            int pawn = Piece.Pawn | promotedPieceColor;
+
+            squares[toIndex] = move.type == MoveType.Promote ? pawn : squares[fromIndex];
+            squares[fromIndex] = move.type != MoveType.EnPassant ? capturedPiece : 0;
+
+            if (move.type == MoveType.EnPassant)
+            {
+                squares[move.enPassantTargetPawnSquare] = capturedPiece;
+            }
+            BoardRenderer.Instance.UpdateBoardAfterAMove(move, piecePromoteTo, undo: true);
+        }
     }
 }

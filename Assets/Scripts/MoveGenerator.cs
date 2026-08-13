@@ -36,6 +36,12 @@ public struct Move
     }
 
     public bool Equals(Move other) => startSquare == other.startSquare && targetSquare == other.targetSquare;
+
+    public Move ReverseMove()
+    {
+        Move reversedMove = new Move(targetSquare, startSquare, type, capturedPiece, castlingRookTargetSquare, castlingRookStartSquare, enPassantTargetPawnSquare);
+        return reversedMove;
+    }
 }
 
 public class MoveGenerator : MonoBehaviour
@@ -330,7 +336,6 @@ public class MoveGenerator : MonoBehaviour
         if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
         {
             pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece));
-            Debug.Log("ƒобавлен ход превращение с вз€тием фигуры " + capturedPiece);
         }
         else
             pseudoLegalMoves.Add(new Move(startSquare, targetSquare, baseType, capturedPiece));

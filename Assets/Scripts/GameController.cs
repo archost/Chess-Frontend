@@ -48,11 +48,9 @@ public class GameController : MonoBehaviour
 
         if (_isSelection)
         {
-            Debug.Log("Selected piece = " + selectedPiece);
             // Если это фигура, и НАШ ХОД
             if (selectedPiece != 0 && Piece.GetColor(selectedPiece) == BoardManager.Instance.colorToMove)
             {
-                Debug.Log("Это фигура, и это наш ход");
                 // TODO: Подсветить легальные ходы
 
                 // Проверить, легален ли ход
@@ -72,7 +70,6 @@ public class GameController : MonoBehaviour
         // Если мы выделили новую фигуру
         else if (selectedPiece != 0)
         {
-            Debug.Log("Выделяем новую фигуру");
             // И если цвет этой фигуры такой же, как и у предыдущей
             if (Piece.IsSameColor(selectedPiece, BoardManager.Instance.squares[_selectedIndex]))
             {
@@ -102,7 +99,6 @@ public class GameController : MonoBehaviour
                     // Вызвать метод у BoardRenderer, который высветит возможные варианты
                     // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
                     // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
-                    Debug.Log("prom");
                     InputManager.Instance.isPromotion = true;
                     BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
                     // После этого мы не сможем обрабатывать обычные ходы
@@ -135,7 +131,6 @@ public class GameController : MonoBehaviour
                 // Вызвать метод у BoardRenderer, который высветит возможные варианты
                 // Поставить InputManager флаг, который означает, что мы сейчас можем кликать только на те клетки,
                 // которые позволяют нам выбрать тип фигуры, все остальные вводы должны игнорироваться
-                Debug.Log("prom");
                 InputManager.Instance.isPromotion = true;
                 BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
                 // После этого мы не сможем обрабатывать обычные ходы
@@ -188,7 +183,7 @@ public class GameController : MonoBehaviour
         }
 
         // Вызвать метод хода у BoardManager
-        BoardManager.Instance.ProcessMove(move);
+        BoardManager.Instance.ProcessMove(move, false);
         // BoardManager сделает ход
         // // И вызовет у BoardRenderer метод обновления визуала
 
@@ -227,7 +222,7 @@ public class GameController : MonoBehaviour
 
         BoardRenderer.Instance.HidePromotionMenu();
 
-        BoardManager.Instance.ProcessMove(promMove, pieceType);
+        BoardManager.Instance.ProcessMove(promMove, false, pieceType);
 
         // Снять красное выделение у всех клеток
         BoardRenderer.Instance.RemoveAllHighlighted();
@@ -266,6 +261,6 @@ public class GameController : MonoBehaviour
     {
         _selectedIndex = -1;
         _isSelection = true;
-        BoardManager.Instance.UndoMove();
+        BoardManager.Instance.ProcessMove(new Move(), true);
     }
 }
