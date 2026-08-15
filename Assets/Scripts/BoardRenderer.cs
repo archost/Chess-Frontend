@@ -28,7 +28,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private GameObject dimPrefab;
     private GameObject dim;
 
-    private const float MOVE_DURATION = 0.2f;
+    private const float MOVE_DURATION = 0.1f;
 
     private void Awake()
     {
@@ -215,7 +215,12 @@ public class BoardRenderer : MonoBehaviour
 
             toSquareView.piece.transform.SetParent(toSquare.transform);
 
-            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION)
+                .setEase(LeanTweenType.easeOutQuad)
+                .setOnComplete(() =>
+                {
+                    AudioManager.Instance.PlayMoveSound(move.type);
+                });
         }
         else if (move.type == MoveType.Promote)
         {
@@ -249,6 +254,7 @@ public class BoardRenderer : MonoBehaviour
                 {
                     movingPiece.gameObject.SetActive(false);
                     instance.SetActive(true);
+                    AudioManager.Instance.PlayMoveSound(move.type);
                 });
         }
         else
@@ -273,7 +279,12 @@ public class BoardRenderer : MonoBehaviour
 
             toSquareView.piece.transform.SetParent(toSquare.transform);
 
-            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION)
+                .setEase(LeanTweenType.easeOutQuad)
+                .setOnComplete(() =>
+                {
+                    AudioManager.Instance.PlayMoveSound(move.type);
+                });
         }
     }
 
@@ -322,7 +333,12 @@ public class BoardRenderer : MonoBehaviour
 
             movingPiece.transform.SetParent(toSquare.transform);
 
-            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION)
+                .setEase(LeanTweenType.easeOutQuad)
+                .setOnComplete(() =>
+                {
+                    AudioManager.Instance.PlayMoveSound(move.type);
+                });
         }
         else
         {
@@ -346,7 +362,12 @@ public class BoardRenderer : MonoBehaviour
 
             toSquareView.piece.transform.SetParent(toSquare.transform);
 
-            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION)
+                .setEase(LeanTweenType.easeOutQuad)
+                .setOnComplete(() =>
+                {
+                    AudioManager.Instance.PlayMoveSound(move.type);
+                });
         }
     }
 

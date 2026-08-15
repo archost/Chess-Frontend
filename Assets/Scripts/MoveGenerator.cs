@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public enum MoveType
@@ -52,10 +53,9 @@ public class MoveGenerator : MonoBehaviour
 {
     public static MoveGenerator Instance;
 
-    private int[] directionOffsets = { 8, -8, -1, 1, 7, -7, 9, -9 };
-    private int[][] numSquaresToEdge;
-    private int[][] knightMoves;
-    public List<Move> pseudoLegalMoves = new List<Move>();
+    private int[] _directionOffsets = { 8, -8, -1, 1, 7, -7, 9, -9 };
+    private int[][] _numSquaresToEdge;
+    private int[][] _knightMoves;
 
     private void Awake()
     {
@@ -72,12 +72,11 @@ public class MoveGenerator : MonoBehaviour
     private void Start()
     {
         PrecomputedMoveData();
-        pseudoLegalMoves = GenerateMoves();
     }
 
     public void PrecomputedMoveData()
     {
-        numSquaresToEdge = new int[64][];
+        _numSquaresToEdge = new int[64][];
 
         // Sliding pieces
         for (int file = 0; file < 8; file++)
@@ -91,7 +90,7 @@ public class MoveGenerator : MonoBehaviour
                 int west = file;
                 int east = 7 - file;
 
-                numSquaresToEdge[index] = new int[]
+                _numSquaresToEdge[index] = new int[]
                 {
                     north,
                     south,
@@ -106,7 +105,7 @@ public class MoveGenerator : MonoBehaviour
         }
 
         // Knight
-        knightMoves = new int[64][];
+        _knightMoves = new int[64][];
 
         int[] dr = { 2, 2, -2, -2, 1, 1, -1, -1 };
         int[] df = { 1, -1, 1, -1, 2, -2, 2, -2 };
@@ -130,13 +129,14 @@ public class MoveGenerator : MonoBehaviour
                 }
             }
 
-            knightMoves[square] = pseudoValidMovesForASquare.ToArray();
+            _knightMoves[square] = pseudoValidMovesForASquare.ToArray();
         }
     }
 
-    public List<Move> GenerateMoves()
+    public List<Move> GeneratePseudoLegalMoves()
     {
-        pseudoLegalMoves.Clear();
+        List<Move> pseudoLegalMoves = new List<Move>();
+
         for (int startSquare = 0; startSquare < 64; startSquare++)
         {
             int piece = BoardManager.Instance.squares[startSquare];
@@ -144,34 +144,53 @@ public class MoveGenerator : MonoBehaviour
             {
                 if (Piece.IsSlidingPiece(piece))
                 {
-                    GenerateSlidingMoves(startSquare, piece);
+                    GenerateSlidingMoves(ref pseudoLegalMoves, startSquare, piece);
                 }
                 if (Piece.GetType(piece) == Piece.Knight)
                 {
-                    GenerateKnightMoves(startSquare, piece);
+                    GenerateKnightMoves(ref pseudoLegalMoves, startSquare, piece);
                 }
                 if (Piece.GetType(piece) == Piece.King)
                 {
-                    GenerateKingMoves(startSquare, piece);
+                    GenerateKingMoves(ref pseudoLegalMoves, startSquare, piece);
                 }
                 if (Piece.GetType(piece) == Piece.Pawn) {
-                    GeneratePawnMoves(startSquare, piece);
+                    GeneratePawnMoves(ref pseudoLegalMoves, startSquare, piece);
                 }
             }
         }
+
         return pseudoLegalMoves;
     }
 
-    private void GenerateSlidingMoves(int startSquare, int piece)
+    public List<Move> FilterLegalMoves()
+    {
+        List<Move> pseudoLegalMoves = GeneratePseudoLegalMoves();
+        List<Move> legalMoves = new List<Move>();
+        foreach (Move moveToVerify in pseudoLegalMoves)
+        {
+            BoardManager.Instance.ProcessMove(moveToVerify, false, silent: true);
+
+            List<Move> opponentResponses = GeneratePseudoLegalMoves();
+
+            if (!opponentResponses.Any(response => Piece.GetType(response.capturedPiece) == Piece.King))
+                legalMoves.Add(moveToVerify);
+
+            BoardManager.Instance.ProcessMove(moveToVerify, true, silent: true);
+        }
+        return legalMoves;
+    }
+
+    private void GenerateSlidingMoves(ref List<Move> pseudoLegalMoves, int startSquare, int piece)
     {
         int startDirIndex = Piece.GetType(piece) == Piece.Bishop ? 4 : 0;
         int endDirIndex = Piece.GetType(piece) == Piece.Rook ? 4 : 8;
 
         for (int directionIndex = startDirIndex; directionIndex < endDirIndex; directionIndex++)
         {
-            for (int n = 0; n < numSquaresToEdge[startSquare][directionIndex]; n++)
+            for (int n = 0; n < _numSquaresToEdge[startSquare][directionIndex]; n++)
             {
-                int targetSquare = startSquare + directionOffsets[directionIndex] * (n + 1);
+                int targetSquare = startSquare + _directionOffsets[directionIndex] * (n + 1);
                 int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
 
                 MoveType moveType = MoveType.Move;
@@ -199,9 +218,9 @@ public class MoveGenerator : MonoBehaviour
         }
     }
 
-    private void GenerateKnightMoves(int startSquare, int piece)
+    private void GenerateKnightMoves(ref List<Move> pseudoLegalMoves, int startSquare, int piece)
     {
-        int[] targets = knightMoves[startSquare];
+        int[] targets = _knightMoves[startSquare];
 
         for (int i = 0; i < targets.Length; i++)
         {
@@ -220,15 +239,15 @@ public class MoveGenerator : MonoBehaviour
         }
     }
 
-    private void GenerateKingMoves(int startSquare, int piece)
+    private void GenerateKingMoves(ref List<Move> pseudoLegalMoves, int startSquare, int piece)
     {
         for (int directionIndex = 0; directionIndex < 8; directionIndex++)
         {
-            if (numSquaresToEdge[startSquare][directionIndex] > 0)
+            if (_numSquaresToEdge[startSquare][directionIndex] > 0)
             {
                 // Если в определенную сторону есть хотя бы одна клетка для хода, то можно туда ходить
                 // нужно только проверить, не стоит ли там наша фигура
-                int targetSquare = startSquare + directionOffsets[directionIndex];
+                int targetSquare = startSquare + _directionOffsets[directionIndex];
                 int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
 
                 MoveType moveType = MoveType.Move;
@@ -255,26 +274,26 @@ public class MoveGenerator : MonoBehaviour
         // 0-0-0 для белых
         if ((BoardManager.Instance.castlingRights & 2) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
         {
-            TryAddCastleMove(4, 2, new int[] { 1, 2, 3 }, 0, 3);
+            TryAddCastleMove(ref pseudoLegalMoves, 4, 2, new int[] { 1, 2, 3 }, 0, 3);
         }
         // 0-0 для белых
         if ((BoardManager.Instance.castlingRights & 1) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
         {
-            TryAddCastleMove(4, 6, new int[] { 5, 6 }, 7, 5);
+            TryAddCastleMove(ref pseudoLegalMoves, 4, 6, new int[] { 5, 6 }, 7, 5);
         }
         // 0-0-0 для черных
         if ((BoardManager.Instance.castlingRights & 8) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
         {
-            TryAddCastleMove(60, 58, new int[] { 57, 58, 59 }, 56, 59);
+            TryAddCastleMove(ref pseudoLegalMoves, 60, 58, new int[] { 57, 58, 59 }, 56, 59);
         }
         // 0-0 для черных
         if ((BoardManager.Instance.castlingRights & 4) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
         {
-            TryAddCastleMove(60, 62, new int[] { 61, 62 }, 63, 61);
+            TryAddCastleMove(ref pseudoLegalMoves, 60, 62, new int[] { 61, 62 }, 63, 61);
         }
     }
 
-    private void GeneratePawnMoves(int startSquare, int piece)
+    private void GeneratePawnMoves(ref List<Move> pseudoLegalMoves, int startSquare, int piece)
     {
         int direction = Piece.GetColor(piece) == Piece.White ? 8 : -8;
 
@@ -284,7 +303,7 @@ public class MoveGenerator : MonoBehaviour
         // Ход на 1 клетку
         if (targetSquare >= 0 && targetSquare < 64 && BoardManager.Instance.squares[targetSquare] == Piece.None)
         {
-            AddPawnMove(startSquare, targetSquare, MoveType.Move, promotedPawn: piece);
+            AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Move, promotedPawn: piece);
 
             // Ход на 2 клетки: мы уже проверили, что на первой клетке пусто, нужно проверить только вторую
             // Ограничение на targetSquare нас не волнует, потому что мы начинаем с 1 или 6 ранга (индексы)
@@ -312,7 +331,7 @@ public class MoveGenerator : MonoBehaviour
 
             if (targetPiece != Piece.None && !Piece.IsSameColor(piece, targetPiece))
             {
-                AddPawnMove(startSquare, targetSquare, MoveType.Take, targetPiece, promotedPawn: piece);
+                AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Take, targetPiece, promotedPawn: piece);
             }
             else if (targetSquare == BoardManager.Instance.enPassantTargetSquare)
             {
@@ -323,7 +342,7 @@ public class MoveGenerator : MonoBehaviour
         }
     }
 
-    private void TryAddCastleMove(int startSquare, int targetSquare, int[] pathSquares, int rookStart, int rookTarget)
+    private void TryAddCastleMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, int[] pathSquares, int rookStart, int rookTarget)
     {
         for (int i = 0; i < pathSquares.Length; i++)
         {
@@ -334,7 +353,7 @@ public class MoveGenerator : MonoBehaviour
         pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Castle, 0, rookStart, rookTarget));
     }
 
-    private void AddPawnMove(int startSquare, int targetSquare, MoveType baseType, int capturedPiece = Piece.None, int promotedPawn = Piece.None)
+    private void AddPawnMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, MoveType baseType, int capturedPiece = Piece.None, int promotedPawn = Piece.None)
     {
         // Если пешка оказывается на последнем или первом ранге, то это точно превращение
         if (targetSquare / 8 == 7 || targetSquare / 8 == 0)

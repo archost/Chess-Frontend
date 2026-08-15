@@ -112,7 +112,7 @@ public class BoardManager : MonoBehaviour
         }
     }
 
-    public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None)
+    public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)
     {
         int fromIndex = move.startSquare;
         int toIndex = move.targetSquare;
@@ -127,24 +127,27 @@ public class BoardManager : MonoBehaviour
             move = lastMove.ReverseMove(); // move = reversedMove
         }
 
+        if (silent | piecePromoteTo == Piece.None)
+            piecePromoteTo = Piece.Queen | colorToMove;
+
         switch (move.type)
         {
             case MoveType.Move:
-                ExecuteMove(move, undo);
+                ExecuteMove(move, undo, silent: silent);
                 break;
             case MoveType.Take:
-                ExecuteMove(move, undo);
+                ExecuteMove(move, undo, silent: silent);
                 break;
             case MoveType.Castle:
-                ExecuteMove(move, undo);
+                ExecuteMove(move, undo, silent: silent);
                 Move rookCastlingMove = new Move(move.castlingRookStartSquare, move.castlingRookTargetSquare, MoveType.Move);
-                ExecuteMove(rookCastlingMove, undo);
+                ExecuteMove(rookCastlingMove, undo, silent: silent);
                 break;
             case MoveType.EnPassant:
-                ExecuteMove(move, undo);
+                ExecuteMove(move, undo, silent: silent);
                 break;
             case MoveType.Promote:
-                ExecuteMove(move, undo, piecePromoteTo);
+                ExecuteMove(move, undo, piecePromoteTo, silent: silent);
                 break;
             default:
                 Debug.Log("How did we get here?");
@@ -181,7 +184,7 @@ public class BoardManager : MonoBehaviour
         colorToMove = Piece.GetReversedColor(colorToMove);
     }
 
-    private void ExecuteMove(Move move, bool undo, int piecePromoteTo = Piece.None)
+    public void ExecuteMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)
     {
         // int fromIndex, int toIndex, int piecePromoteTo = 0, int capturedPiece = 0, bool enPassant = false
         int fromIndex = move.startSquare;
@@ -196,7 +199,8 @@ public class BoardManager : MonoBehaviour
             {
                 squares[move.enPassantTargetPawnSquare] = 0;
             }
-            BoardRenderer.Instance.VizualizeMove(move, piecePromoteTo);
+            if (!silent)
+                BoardRenderer.Instance.VizualizeMove(move, piecePromoteTo);
         }
         else
         {
@@ -211,7 +215,8 @@ public class BoardManager : MonoBehaviour
             {
                 squares[move.enPassantTargetPawnSquare] = capturedPiece;
             }
-            BoardRenderer.Instance.UndoVizualizeMove(move);
+            if (!silent)
+                BoardRenderer.Instance.UndoVizualizeMove(move);
         }
     }
 }

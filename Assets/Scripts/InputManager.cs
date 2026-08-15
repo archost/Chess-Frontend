@@ -47,7 +47,7 @@ public class InputManager : MonoBehaviour
             else if (_selectedSquare.gameObject.GetComponent<SpriteRenderer>().sortingOrder == 2)
             {
                 // Нам нужно, чтобы он обрабатывал только клики на promotionMenu. Пока определяю с помощью sortingOrder
-                GameController.Instance.MakePromotionMove(_selectedSquare.squareIndex);
+                GameController.Instance.OnPromotionPieceSelected(_selectedSquare.squareIndex);
                 isPromotion = false;
             }
         }

@@ -1,5 +1,7 @@
+using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SocialPlatforms;
+using System.Collections.Generic;
 
 public class GameController : MonoBehaviour
 {
@@ -9,9 +11,9 @@ public class GameController : MonoBehaviour
 
     private int _selectedIndex;
 
-    private Move lastMove;
+    private Move _lastMove;
 
-    private Move promMove;  
+    private Move _pendingPromotionMove;  
 
     private void Awake()
     {
@@ -28,7 +30,9 @@ public class GameController : MonoBehaviour
     private void Start()
     {
         _isSelection = true;
-        lastMove = new Move();
+        _lastMove = new Move();
+
+        
     }
 
     void Update()
@@ -39,12 +43,13 @@ public class GameController : MonoBehaviour
     public void ProcessRightClick(int squareIndex)
     {
         BoardRenderer.Instance.ToggleHighlightSquare(squareIndex);
+        StartCoroutine(Engine.Instance.MakeARandomMove());
     }
 
     public void ProcessClick(int squareIndex)
     {
         int selectedPiece = BoardManager.Instance.squares[squareIndex];
-        MoveGenerator.Instance.GenerateMoves();
+        List<Move> legalMoves = MoveGenerator.Instance.FilterLegalMoves();
 
         if (_isSelection)
         {
@@ -52,11 +57,11 @@ public class GameController : MonoBehaviour
             if (selectedPiece != 0 && Piece.GetColor(selectedPiece) == BoardManager.Instance.colorToMove)
             {
                 // Подсветить легальные ходы
-                foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+                foreach (var legalMove in legalMoves)
                 {
-                    if (squareIndex == pseudoLegalMove.startSquare)
+                    if (squareIndex == legalMove.startSquare)
                     {
-                        BoardRenderer.Instance.ShowMoveIsLegal(pseudoLegalMove.targetSquare);
+                        BoardRenderer.Instance.ShowMoveIsLegal(legalMove.targetSquare);
                     }
                 }
                 
@@ -91,28 +96,30 @@ public class GameController : MonoBehaviour
             // Если нет, значит мы хотим срубить, но контроллеру это не важно, просто ход
             else
             {
-                MakeAMove(squareIndex);
+                RequestMove(squareIndex);
             }
         }
         // Мы выделили пустую клетку и сейчас не выделение, значит мы хотим сделать ход
         else
         {
-            MakeAMove(squareIndex);
+            RequestMove(squareIndex);
         }
     }
 
-    private void MakeAMove(int squareIndex)
+    public void RequestMove(int targetSquareIndex)
     {
-        Move move = new Move(_selectedIndex, squareIndex, MoveType.Undefined);
+        Move move = new Move(_selectedIndex, targetSquareIndex, MoveType.Undefined);
         bool legal = false;
 
+        List<Move> legalMoves = MoveGenerator.Instance.FilterLegalMoves();
+
         // Проверить, легален ли ход
-        foreach (var pseudoLegalMove in MoveGenerator.Instance.pseudoLegalMoves)
+        foreach (var legalMove in legalMoves)
         {
-            if (move.Equals(pseudoLegalMove))
+            if (move.Equals(legalMove))
             {
                 Debug.Log("This move is legal (kinda)");
-                move = pseudoLegalMove;
+                move = legalMove;
                 legal = true;
             }
         }
@@ -126,37 +133,36 @@ public class GameController : MonoBehaviour
         if (move.type == MoveType.Promote)
         {
             InputManager.Instance.isPromotion = true;
+            _pendingPromotionMove = move;
             BoardRenderer.Instance.ShowPromotionMenu(Piece.GetColor(BoardManager.Instance.squares[_selectedIndex]));
-
-            promMove = move;
-
             return;
         }
 
-        // Вызвать метод хода у BoardManager
-        BoardManager.Instance.ProcessMove(move, false);
-        // BoardManager сделает ход
-        // // И вызовет у BoardRenderer метод обновления визуала
-
-        UpdateSelectionVisual();
-
-        BoardRenderer.Instance.SelectSquare(squareIndex);
-        BoardRenderer.Instance.UnselectSquare(_selectedIndex);
-        _isSelection = true;
-
-        AudioManager.Instance.PlayMoveSound(move.type);
-
-        // Сохраняем последний сделанный ход
-        lastMove = move;
+        ExecuteMove(move, Piece.None);
     }
 
-    public void MakePromotionMove(int squareIndex)
+    public void ExecuteMove(Move move, int promotionPieceType)
     {
-        // Сначала определить, какой цвет фигуры, чтобы брать фигуры из соответствующего меню
-        // Это у нас сейчас есть в lastMove
-        // Правда значений фигур у нас нет, надо завести в BoardManager?
+        BoardManager.Instance.ProcessMove(move, false, promotionPieceType);
+
+        BoardRenderer.Instance.SelectSquare(move.targetSquare);
+        BoardRenderer.Instance.UnselectSquare(move.startSquare);
+        BoardRenderer.Instance.ResetLegalMovesIndication();
+
+        BoardRenderer.Instance.ResetSquareColor(_lastMove.startSquare);
+        BoardRenderer.Instance.ResetSquareColor(_lastMove.targetSquare);
+
+        _selectedIndex = -1;
+        _isSelection = true;
+        _lastMove = move;
+
+        StartCoroutine(Engine.Instance.MakeARandomMove());
+    }
+
+    public void OnPromotionPieceSelected(int squareIndex)
+    {
         int[] deck;
-        if (Piece.GetColor(BoardManager.Instance.squares[promMove.startSquare]) == Piece.White)
+        if (Piece.GetColor(BoardManager.Instance.squares[_pendingPromotionMove.startSquare]) == Piece.White)
             deck = BoardManager.Instance.whitePromotionDeck;
         else
             deck = BoardManager.Instance.blackPromotionDeck;
@@ -165,35 +171,25 @@ public class GameController : MonoBehaviour
 
         BoardRenderer.Instance.HidePromotionMenu();
 
-        BoardManager.Instance.ProcessMove(promMove, false, pieceType);
-
-        UpdateSelectionVisual();
-
-        BoardRenderer.Instance.SelectSquare(promMove.targetSquare);
-        BoardRenderer.Instance.UnselectSquare(_selectedIndex);
-
-        AudioManager.Instance.PlayMoveSound(MoveType.Promote);
-
-        lastMove = promMove;
-        _isSelection = true;
+        if (_pendingPromotionMove.type != MoveType.Undefined)
+        {
+            ExecuteMove(_pendingPromotionMove, pieceType);
+            _pendingPromotionMove = new Move();
+        }
     }
 
-    private void UpdateSelectionVisual()
+    public void UndoMove()
     {
         // Снять красное выделение у всех клеток
         BoardRenderer.Instance.RemoveAllHighlighted();
 
         // Снять выделение с предыдущих клеток
-        BoardRenderer.Instance.ResetSquareColor(lastMove.startSquare);
-        BoardRenderer.Instance.ResetSquareColor(lastMove.targetSquare);
+        BoardRenderer.Instance.ResetSquareColor(_lastMove.startSquare);
+        BoardRenderer.Instance.ResetSquareColor(_lastMove.targetSquare);
 
         // Сбрасываем выделение легальных ходов
         BoardRenderer.Instance.ResetLegalMovesIndication();
-    }
 
-    public void UndoMove()
-    {
-        UpdateSelectionVisual();
         if (_selectedIndex != -1)
         {
             BoardRenderer.Instance.ResetSquareColor(_selectedIndex);
@@ -205,13 +201,13 @@ public class GameController : MonoBehaviour
 
         if (BoardManager.Instance.moveHistory.Count > 0)
         {
-            lastMove = BoardManager.Instance.moveHistory.Peek();
+            _lastMove = BoardManager.Instance.moveHistory.Peek();
         }
 
         if (BoardManager.Instance.moveHistory.Count != 0)
         {
-            BoardRenderer.Instance.SelectSquare(lastMove.startSquare);
-            BoardRenderer.Instance.UnselectSquare(lastMove.targetSquare);
+            BoardRenderer.Instance.SelectSquare(_lastMove.startSquare);
+            BoardRenderer.Instance.UnselectSquare(_lastMove.targetSquare);
         }
     }
 }
