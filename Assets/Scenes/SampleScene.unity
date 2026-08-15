@@ -466,10 +466,6 @@ MonoBehaviour:
   darkColor: {fileID: 2100000, guid: 1f675107d4f4a3d4d89eb085037428bf, type: 2}
   squarePrefab: {fileID: 7422667002084104213, guid: 8d6f220e590593a40a4d5f8dc793aadb, type: 3}
   piecePrefabsData: {fileID: 11400000, guid: 143672e39de451442a30ca76acc9a29d, type: 2}
-  selectedMat: {fileID: 2100000, guid: 15f008aadd9a58142a766174c0618988, type: 2}
-  lastMoveSquareMat: {fileID: 2100000, guid: b558fca2c6dc3bc4288853c2fcfc82b0, type: 2}
-  legalMoveMaterial: {fileID: 2100000, guid: 4c8eaf3f7530312499687e18571cf535, type: 2}
-  highlightMaterial: {fileID: 2100000, guid: 4988fbd81fc75114381c4e3c1eb0a6f3, type: 2}
   dimPrefab: {fileID: 5534586856040433955, guid: 953d3eebfbe51dd468cd419b4a7a0f18, type: 3}
 --- !u!4 &320955936
 Transform:
@@ -892,7 +888,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoardManager
   squares: 
-  fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+  fen: 7k/3N2qp/b5r1/2p1Q1N1/Pp4PK/7P/1P3p2/6r1 w - - 7 4
   whitePromotionDeck: 
   blackPromotionDeck: 
   colorToMove: 8

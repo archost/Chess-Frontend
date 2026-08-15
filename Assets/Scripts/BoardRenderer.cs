@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
+using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
 
@@ -18,13 +19,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private GameObject squarePrefab;
     [SerializeField] private PiecePrefabsData piecePrefabsData;
 
-    [SerializeField] public Material selectedMat;
-    [SerializeField] public Material lastMoveSquareMat;
-    [SerializeField] public Material legalMoveMaterial;
-    [SerializeField] public Material highlightMaterial;
-
     private GameObject[] squares;
-    private List<GameObject> pieces;
     private GameObject[] whitePromotionUISquares;
     private GameObject[] blackPromotionUISquares;
     private GameObject whitePromotionMenu;
@@ -32,6 +27,8 @@ public class BoardRenderer : MonoBehaviour
     private int[] promotionPieces;
     [SerializeField] private GameObject dimPrefab;
     private GameObject dim;
+
+    private const float MOVE_DURATION = 0.2f;
 
     private void Awake()
     {
@@ -47,9 +44,9 @@ public class BoardRenderer : MonoBehaviour
 
     void Start()
     {
+        LeanTween.reset();
         dim = Instantiate(dimPrefab, transform);
         squares = new GameObject[64];
-        pieces = new List<GameObject>();
         whitePromotionUISquares = new GameObject[4];
         blackPromotionUISquares = new GameObject[4];
         promotionPieces = new int[4] { 
@@ -71,17 +68,17 @@ public class BoardRenderer : MonoBehaviour
 
     public void ToggleHighlightSquare(int index)
     {
-        GameObject square = squares[index];
-        if (square.GetComponent<SquareView>().isHighlighted)
+        SquareView squareView = squares[index].GetComponent<SquareView>();
+        if (squareView.isHighlighted)
         {
-            SetSquareMaterial(index, square.GetComponent<SquareView>().lastMaterial);
-            square.GetComponent<SquareView>().isHighlighted = false;
+            squares[index].GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", squareView.lastColor);
+            squareView.isHighlighted = false;
         }
         else
         {
-            square.GetComponent<SquareView>().lastMaterial = square.GetComponent<SpriteRenderer>().material;
-            square.GetComponent<SpriteRenderer>().material = highlightMaterial;
-            square.GetComponent<SquareView>().isHighlighted = true;
+            squareView.lastColor = squares[index].GetComponent<SpriteRenderer>().material.GetColor("_BaseColor");
+            squares[index].GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", Color.Lerp(squareView.baseColor, Color.red, 0.5f));
+            squareView.isHighlighted = true;
         }
     }
 
@@ -98,31 +95,30 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
-    public void SetSquareMaterial(int index, Material mat)
-    {
-        squares[index].GetComponent<SpriteRenderer>().material = mat;
-    }
-
     public void SelectSquare(int index)
     {
-        squares[index].GetComponent<SpriteRenderer>().material = selectedMat;
+        Color baseColor = squares[index].GetComponent<SquareView>().baseColor;
+        squares[index].GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", Color.Lerp(baseColor, Color.yellow, 0.5f));
     }
 
     public void UnselectSquare(int index)
     {
-        squares[index].GetComponent<SpriteRenderer>().material = lastMoveSquareMat;
+        Color baseColor = squares[index].GetComponent<SquareView>().baseColor;
+        squares[index].GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", Color.Lerp(baseColor, Color.orange, 0.3f));
     }
 
     public void ResetSquareColor(int index)
     {
-        squares[index].GetComponent<SpriteRenderer>().material = squares[index].GetComponent<SquareView>().material;
+        Color baseColor = squares[index].GetComponent<SquareView>().baseColor;
+        squares[index].GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", baseColor);
     }
 
     public void ResetAllSquaresColor()
     {
         foreach (var square in squares)
         {
-            square.GetComponent<SpriteRenderer>().material = square.GetComponent<SquareView>().material;
+            Color baseColor = square.GetComponent<SquareView>().baseColor;
+            square.GetComponent<SpriteRenderer>().material.SetColor("_BaseColor", baseColor);
         }
     }
 
@@ -177,13 +173,12 @@ public class BoardRenderer : MonoBehaviour
                 squares[i].GetComponent<SquareView>().piece = instance.GetComponent<PieceView>();
                 instance.GetComponent<PieceView>().square = squares[i].GetComponent<SquareView>();
                 instance.GetComponent<PieceView>().pieceType = currentPiece;
-                pieces.Add(instance);
                 
             }
         }
     }
 
-    public void UpdateBoardAfterAMove(Move move, int piecePromoteTo, bool undo = false)
+    public void VizualizeMove(Move move, int piecePromoteTo)
     {
         GameObject fromSquare = squares[move.startSquare];
         GameObject toSquare = squares[move.targetSquare];
@@ -200,16 +195,66 @@ public class BoardRenderer : MonoBehaviour
             enPassantSquareView = enpassantSquare.GetComponent<SquareView>();
         }
 
-        if (!undo)
+        if (move.type == MoveType.EnPassant)
         {
-            if (move.type == MoveType.EnPassant)
+            PieceView movingPiece = fromSquareView.piece;
+
+            // Если это en passant, то вот эта ветка будет вместо взятия
+            // Точно также на клетке пешки, которую берут на проход, выключаем фигуру
+            enPassantSquareView.piece.gameObject.SetActive(false);
+            // И обнуляем ну этой клетки ссылку на фигуру
+            enPassantSquareView.piece = null;
+
+            // Целевой клетке присваивается PieceView стартовой
+            toSquareView.piece = fromSquareView.piece;
+            // Обновить значение клетки у фигуры
+            toSquareView.piece.square = toSquareView;
+
+            // PieceView стартовой клетки обнуляется
+            fromSquareView.piece = null;
+
+            toSquareView.piece.transform.SetParent(toSquare.transform);
+
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+        }
+        else if (move.type == MoveType.Promote)
+        {
+            PieceView movingPiece = fromSquareView.piece;
+
+            if (toSquareView.piece != null)
             {
-                // Если это en passant, то вот эта ветка будет вместо взятия
-                // Точно также на клетке пешки, которую берут на проход, выключаем фигуру
-                enPassantSquareView.piece.gameObject.SetActive(false);
-                // И обнуляем ну этой клетки ссылку на фигуру
-                enPassantSquareView.piece = null;
+                // Если на целевой клетке есть фигура - выключить ее
+                toSquareView.piece.gameObject.SetActive(false);
             }
+
+            // Пешке присваиваем ссылку на целевую клетку
+            fromSquareView.piece.square = toSquareView;
+
+            // Перемещаем пешку на целевую клетку, не меняя при этом ее координат
+            fromSquareView.piece.transform.SetParent(toSquare.transform);
+
+            // PieceView стартовой клетки обнуляется
+            fromSquareView.piece = null;
+
+            // Если это превращение, то на целевой клетке нужно создать новую фигуру
+            GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
+            toSquareView.piece = instance.GetComponent<PieceView>();
+            instance.GetComponent<PieceView>().square = toSquareView;
+            // Выключаем на время анимации фигуру, в которую пешка превратилась
+            instance.SetActive(false);
+
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION)
+                .setEase(LeanTweenType.easeOutQuad)
+                .setOnComplete(() =>
+                {
+                    movingPiece.gameObject.SetActive(false);
+                    instance.SetActive(true);
+                });
+        }
+        else
+        {
+            PieceView movingPiece = fromSquareView.piece;
+
             if (toSquareView.piece != null)
             {
                 // Если на целевой клетке есть фигура - выключить ее
@@ -217,123 +262,107 @@ public class BoardRenderer : MonoBehaviour
                 // Обнулить ссылку на фигуру у целевой клетки
                 toSquareView.piece = null;
             }
-            if (fromSquareView.piece != null)
-            {
-                if (move.type == MoveType.Promote)
-                {
-                    // Если это превращение, то на целевой клетке нужно создать новую фигуру
-                    // А не перемещать туда фигуру из стартовой клетки
-                    GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
-                    toSquareView.piece = instance.GetComponent<PieceView>();
-                    instance.GetComponent<PieceView>().square = toSquareView;
-                    pieces.Add(instance);
 
-                    // А фигура на стартовой клетке выключается
-                    // И PieceView стартовой клетки обнуляется
-                    fromSquareView.piece.gameObject.SetActive(false);
-                    fromSquareView.piece = null;
-                }
-                else
-                {
-                    // Установить текущей фигуре - родителя - целевую клетку
-                    fromSquareView.piece.transform.SetParent(toSquare.transform, false);
-                    // Целевой клетке присваивается PieceView стартовой
-                    toSquareView.piece = fromSquareView.piece;
-                    // Обновить значение клетки у фигуры
-                    toSquareView.piece.square = toSquareView;
+            // Целевой клетке присваивается PieceView стартовой
+            toSquareView.piece = fromSquareView.piece;
+            // Обновить значение клетки у фигуры
+            toSquareView.piece.square = toSquareView;
 
-                    // PieceView стартовой клетки обнуляется
-                    fromSquareView.piece = null;
-                }
-            }
-        }
-        else
-        {
-            if (move.type != MoveType.Promote)
-            {
-                if (fromSquareView.piece != null)
-                {
-                    // Сначала двинем обратно фигуру
+            // PieceView стартовой клетки обнуляется
+            fromSquareView.piece = null;
 
-                    // Установить текущей фигуре - родителя - целевую клетку
-                    fromSquareView.piece.transform.SetParent(toSquare.transform, false);
-                    // Целевой клетке присваивается PieceView стартовой
-                    toSquareView.piece = fromSquareView.piece;
-                    // Обновить значение клетки у фигуры
-                    toSquareView.piece.square = toSquareView;
+            toSquareView.piece.transform.SetParent(toSquare.transform);
 
-                    // PieceView стартовой клетки обнуляется
-                    fromSquareView.piece = null;
-                }
-                if (move.capturedPiece != 0)
-                {
-                    // Это значит, что этим ходом нам нужно возродить эту capturedPiece
-                    // То есть включить ее, и у клетки fromSquare установить ссылку на нее
-                    // Правда ее сначала нужно найти в массиве фигур
-
-                    if (move.type == MoveType.EnPassant)
-                    {
-                        // Если это был en passant, то включаем пешку на enpassantSquare
-                        int capturedPieceIndex = FindPiece(move.capturedPiece, enPassantSquareView);
-
-                        pieces[capturedPieceIndex].gameObject.SetActive(true);
-                        enPassantSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
-                    }
-                    else
-                    {
-                        // Если это был обычный ход со взятием, то мы включаем фигуру там, откуда мы уходим
-                        int capturedPieceIndex = FindPiece(move.capturedPiece, fromSquareView);
-
-                        pieces[capturedPieceIndex].gameObject.SetActive(true);
-                        fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
-                    }
-                }
-            }
-            else
-            {
-                // Отмена превращения
-                // Находим пешку, которая до этого просто пропала
-                // Мы не знаем, какой у нее цвет, потому что не храним эту информацию в Move
-                // Поэтому поиск нужно выполнить дваджы
-                int promotedPawnIndex = FindPiece(Piece.Pawn | Piece.White, toSquareView);
-                if (promotedPawnIndex == -1)
-                    promotedPawnIndex = FindPiece(Piece.Pawn | Piece.Black, toSquareView);
-                pieces[promotedPawnIndex].SetActive(true);
-                toSquareView.piece = pieces[promotedPawnIndex].GetComponent<PieceView>();
-
-                // Нам нужно уничтожить объект фигуры, в которую пешка превратилась
-                // И обнулить у fromSquare ссылку на фигуру
-                pieces.Remove(fromSquareView.piece.gameObject); // Исправление бага - после удаления ссылка на фигуру все еще лежит в pieces
-                Destroy(fromSquareView.piece.gameObject);
-                fromSquareView.piece = null;
-
-                // Также нужно иметь в виду, что превращение могло быть после взятия
-                // В этом случае нам нужно:
-                // Найти фигуру, которая была съедена
-                // Включить ее
-                // Установить fromSquare ссылку на нее
-                if (move.capturedPiece != 0)
-                {
-                    int capturedPieceIndex = FindPiece(move.capturedPiece, fromSquareView);
-                    pieces[capturedPieceIndex].SetActive(true);
-                    fromSquareView.piece = pieces[capturedPieceIndex].GetComponent<PieceView>();
-                }
-            }
-            
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
         }
     }
 
-    private int FindPiece(int piece, SquareView square)
+    public void UndoVizualizeMove(Move move)
     {
-        for (int i = 0; i < pieces.Count; i++)
+        GameObject fromSquare = squares[move.startSquare];
+        GameObject toSquare = squares[move.targetSquare];
+
+        SquareView fromSquareView = fromSquare.GetComponent<SquareView>();
+        SquareView toSquareView = toSquare.GetComponent<SquareView>();
+
+        GameObject enpassantSquare = null;
+        SquareView enPassantSquareView = null;
+
+        if (move.enPassantTargetPawnSquare != -1)
         {
-            if (pieces[i].GetComponent<PieceView>().pieceType == piece && pieces[i].GetComponent<PieceView>().square == square)
-            {
-                return i;
-            }
+            enpassantSquare = squares[move.enPassantTargetPawnSquare];
+            enPassantSquareView = enpassantSquare.GetComponent<SquareView>();
         }
 
-        return -1;
+        if (move.type == MoveType.Promote)
+        {
+            // Нам нужно уничтожить объект фигуры, в которую пешка превратилась
+            // И обнулить у fromSquare ссылку на фигуру
+            Destroy(fromSquareView.piece.gameObject);
+            fromSquareView.piece = null;
+
+            // Мы восстановили пешку
+            RestorePiece(fromSquareView, move.promotedPawn);
+            // Но после этого она привязана к fromSquareView
+            // А нам нужно привязать ее к toSquareView
+
+            // Целевой клетке присваивается PieceView стартовой
+            toSquareView.piece = fromSquareView.piece;
+            fromSquareView.piece = null;
+            // Обновить значение клетки у фигуры
+            toSquareView.piece.square = toSquareView;
+
+            PieceView movingPiece = toSquareView.piece;
+
+            // Также нужно иметь в виду, что превращение могло быть после взятия
+            if (move.capturedPiece != 0)
+            {
+                RestorePiece(fromSquareView, move.capturedPiece);
+            }
+
+            movingPiece.transform.SetParent(toSquare.transform);
+
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+        }
+        else
+        {
+            PieceView movingPiece = fromSquareView.piece;
+
+            // Целевой клетке присваивается PieceView стартовой
+            toSquareView.piece = fromSquareView.piece;
+            // Обновить значение клетки у фигуры
+            toSquareView.piece.square = toSquareView;
+
+            // PieceView стартовой клетки обнуляется
+            fromSquareView.piece = null;
+
+            if (move.capturedPiece != 0)
+            {
+                if (move.type == MoveType.EnPassant)
+                    RestorePiece(enPassantSquareView, move.capturedPiece);
+                else
+                    RestorePiece(fromSquareView, move.capturedPiece);
+            }
+
+            toSquareView.piece.transform.SetParent(toSquare.transform);
+
+            LeanTween.move(movingPiece.gameObject, toSquareView.transform.position, MOVE_DURATION).setEase(LeanTweenType.easeOutQuad);
+        }
+    }
+
+    private void RestorePiece(SquareView square, int pieceType)
+    {
+        PieceView[] pieces = square.transform.GetComponentsInChildren<PieceView>(true);
+        foreach (var piece in pieces)
+        {
+            if (piece.pieceType == pieceType)
+            {
+                piece.gameObject.SetActive(true);
+                piece.transform.localPosition = Vector3.zero;
+                square.piece = piece;
+                return;
+            }
+        }
     }
 
     private GameObject CreatePromotionMenu(int color)

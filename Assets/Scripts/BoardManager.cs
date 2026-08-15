@@ -9,7 +9,7 @@ public class BoardManager : MonoBehaviour
     public static BoardManager Instance { get; private set; }
 
     public int[] squares;
-    private Stack<Move> moveHistory;
+    public Stack<Move> moveHistory;
     public string fen = "";
     // rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
     // r3k2r/2b4q/8/8/8/8/2B4Q/R3K2R w KQkq - 0 1
@@ -114,8 +114,6 @@ public class BoardManager : MonoBehaviour
 
     public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None)
     {
-        enPassantTargetSquare = -1;
-
         int fromIndex = move.startSquare;
         int toIndex = move.targetSquare;
         int pieceToMove = squares[fromIndex];
@@ -158,16 +156,20 @@ public class BoardManager : MonoBehaviour
         if (undo)
         {
             castlingRights = lastMove.previousCastlingRights;
+            enPassantTargetSquare = lastMove.previousEnPassantSquare;
         }
         else
         {
+            move.previousCastlingRights = castlingRights;
+            move.previousEnPassantSquare = enPassantTargetSquare;
+
             // Проверяем, был ли сделан ход пешкой на две клетки, чтобы выставить enPassantTargetSquare
             if (Piece.GetType(pieceToMove) == Piece.Pawn && Math.Abs(fromIndex / 8 - toIndex / 8) == 2)
             {
                 enPassantTargetSquare = Piece.GetColor(pieceToMove) == Piece.White ? toIndex - 8 : toIndex + 8;
             }
-
-            move.previousCastlingRights = castlingRights;
+            else
+                enPassantTargetSquare = -1;
 
             // Обновление маски флагов рокировки
             castlingRights &= ~(castlingRightsMask[fromIndex] | castlingRightsMask[toIndex]);
@@ -194,7 +196,7 @@ public class BoardManager : MonoBehaviour
             {
                 squares[move.enPassantTargetPawnSquare] = 0;
             }
-            BoardRenderer.Instance.UpdateBoardAfterAMove(move, piecePromoteTo);
+            BoardRenderer.Instance.VizualizeMove(move, piecePromoteTo);
         }
         else
         {
@@ -209,7 +211,7 @@ public class BoardManager : MonoBehaviour
             {
                 squares[move.enPassantTargetPawnSquare] = capturedPiece;
             }
-            BoardRenderer.Instance.UpdateBoardAfterAMove(move, piecePromoteTo, undo: true);
+            BoardRenderer.Instance.UndoVizualizeMove(move);
         }
     }
 }

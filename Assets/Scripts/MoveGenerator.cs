@@ -22,8 +22,10 @@ public struct Move
     public int castlingRookTargetSquare;
     public int enPassantTargetPawnSquare;
     public int previousCastlingRights;
+    public int promotedPawn;
+    public int previousEnPassantSquare;
 
-    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1)
+    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1, int promotedPawn = Piece.None)
     {
         this.startSquare = startSquare;
         this.targetSquare = targetSquare;
@@ -33,13 +35,15 @@ public struct Move
         castlingRookTargetSquare = rookTarget;
         this.enPassantTargetPawnSquare = enPassantTargetPawn;
         previousCastlingRights = 0;
+        this.promotedPawn = promotedPawn;
+        previousEnPassantSquare = -1;
     }
 
     public bool Equals(Move other) => startSquare == other.startSquare && targetSquare == other.targetSquare;
 
     public Move ReverseMove()
     {
-        Move reversedMove = new Move(targetSquare, startSquare, type, capturedPiece, castlingRookTargetSquare, castlingRookStartSquare, enPassantTargetPawnSquare);
+        Move reversedMove = new Move(targetSquare, startSquare, type, capturedPiece, castlingRookTargetSquare, castlingRookStartSquare, enPassantTargetPawnSquare, promotedPawn);
         return reversedMove;
     }
 }
@@ -280,7 +284,7 @@ public class MoveGenerator : MonoBehaviour
         // Ход на 1 клетку
         if (targetSquare >= 0 && targetSquare < 64 && BoardManager.Instance.squares[targetSquare] == Piece.None)
         {
-            AddPawnMove(startSquare, targetSquare, MoveType.Move);
+            AddPawnMove(startSquare, targetSquare, MoveType.Move, promotedPawn: piece);
 
             // Ход на 2 клетки: мы уже проверили, что на первой клетке пусто, нужно проверить только вторую
             // Ограничение на targetSquare нас не волнует, потому что мы начинаем с 1 или 6 ранга (индексы)
@@ -308,7 +312,7 @@ public class MoveGenerator : MonoBehaviour
 
             if (targetPiece != Piece.None && !Piece.IsSameColor(piece, targetPiece))
             {
-                AddPawnMove(startSquare, targetSquare, MoveType.Take, targetPiece);
+                AddPawnMove(startSquare, targetSquare, MoveType.Take, targetPiece, promotedPawn: piece);
             }
             else if (targetSquare == BoardManager.Instance.enPassantTargetSquare)
             {
@@ -330,12 +334,12 @@ public class MoveGenerator : MonoBehaviour
         pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Castle, 0, rookStart, rookTarget));
     }
 
-    private void AddPawnMove(int startSquare, int targetSquare, MoveType baseType, int capturedPiece = 0)
+    private void AddPawnMove(int startSquare, int targetSquare, MoveType baseType, int capturedPiece = Piece.None, int promotedPawn = Piece.None)
     {
         // Если пешка оказывается на последнем или первом ранге, то это точно превращение
         if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn));
         }
         else
             pseudoLegalMoves.Add(new Move(startSquare, targetSquare, baseType, capturedPiece));
