@@ -43,7 +43,7 @@ public class GameController : MonoBehaviour
     public void ProcessRightClick(int squareIndex)
     {
         BoardRenderer.Instance.ToggleHighlightSquare(squareIndex);
-        StartCoroutine(Engine.Instance.MakeARandomMove());
+        // StartCoroutine(Engine.Instance.MakeARandomMove());
     }
 
     public void ProcessClick(int squareIndex)
@@ -156,7 +156,8 @@ public class GameController : MonoBehaviour
         _isSelection = true;
         _lastMove = move;
 
-        StartCoroutine(Engine.Instance.MakeARandomMove());
+        // if (BoardManager.Instance.colorToMove == Piece.Black)
+        //     StartCoroutine(Engine.Instance.MakeARandomMove());
     }
 
     public void OnPromotionPieceSelected(int squareIndex)
@@ -198,6 +199,7 @@ public class GameController : MonoBehaviour
         _selectedIndex = -1;
         _isSelection = true;
         BoardManager.Instance.ProcessMove(new Move(), true);
+        // BoardManager.Instance.ProcessMove(new Move(), true);
 
         if (BoardManager.Instance.moveHistory.Count > 0)
         {

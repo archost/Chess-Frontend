@@ -28,7 +28,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private GameObject dimPrefab;
     private GameObject dim;
 
-    private const float MOVE_DURATION = 0.1f;
+    private const float MOVE_DURATION = 0.05f;
 
     private void Awake()
     {

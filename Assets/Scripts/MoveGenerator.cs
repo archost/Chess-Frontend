@@ -1,7 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEngine;
+using static UnityEngine.Audio.ProcessorInstance;
 
 public enum MoveType
 {
@@ -25,8 +28,9 @@ public struct Move
     public int previousCastlingRights;
     public int promotedPawn;
     public int previousEnPassantSquare;
+    public int promoteTo;
 
-    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1, int promotedPawn = Piece.None)
+    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1, int promotedPawn = Piece.None, int promoteTo = Piece.None)
     {
         this.startSquare = startSquare;
         this.targetSquare = targetSquare;
@@ -38,6 +42,7 @@ public struct Move
         previousCastlingRights = 0;
         this.promotedPawn = promotedPawn;
         previousEnPassantSquare = -1;
+        this.promoteTo = promoteTo;
     }
 
     public bool Equals(Move other) => startSquare == other.startSquare && targetSquare == other.targetSquare;
@@ -171,6 +176,218 @@ public class MoveGenerator : MonoBehaviour
         {
             BoardManager.Instance.ProcessMove(moveToVerify, false, silent: true);
 
+            int opponentColor = BoardManager.Instance.colorToMove;
+            int kingIndex = FindPiece(Piece.King | Piece.GetReversedColor(opponentColor));
+
+            bool isKingAttacked = IsSquareAttacked(kingIndex, opponentColor);
+            bool isCastlingAllowed = true;
+
+            int[] castlingSquaresToCheck = { };
+
+            if (moveToVerify.type == MoveType.Castle)
+            {
+                if (Piece.GetReversedColor(opponentColor) == Piece.White)
+                {
+                    // 0-0-0
+                    if (moveToVerify.castlingRookStartSquare == 0)
+                    {
+                        castlingSquaresToCheck = new int[3] { 2, 3, 4 };
+                    }
+                    // 0-0
+                    else if (moveToVerify.castlingRookStartSquare == 7)
+                    {
+                        castlingSquaresToCheck = new int[3] { 4, 5, 6 };
+                    }
+                }
+                else
+                {
+                    // 0-0-0
+                    if (moveToVerify.castlingRookStartSquare == 56)
+                    {
+                        castlingSquaresToCheck = new int[3] { 58, 59, 60 };
+                    }
+                    // 0-0
+                    else if (moveToVerify.castlingRookStartSquare == 63)
+                    {
+                        castlingSquaresToCheck = new int[3] { 60, 61, 62 };
+                    }
+                }
+
+                foreach (int index in castlingSquaresToCheck)
+                {
+                    if (IsSquareAttacked(index, opponentColor))
+                        isCastlingAllowed = false;
+                }
+            }
+
+            if (!isKingAttacked && isCastlingAllowed)
+            {
+                legalMoves.Add(moveToVerify);
+            }
+
+            BoardManager.Instance.ProcessMove(moveToVerify, true, silent: true);
+        }
+        return legalMoves;
+    }
+
+    public int MoveGenerationTest(int depth)
+    {
+        if (depth == 0)
+            return 1;
+        List<Move> moves = FilterLegalMoves();
+        int numPositions = 0;
+        //string debug = "";
+
+        foreach (Move move in moves)
+        {
+
+            BoardManager.Instance.ProcessMove(move, false, silent: true);
+
+            int positions = MoveGenerationTest(depth - 1);
+            numPositions += positions;
+
+            //if (depth == 2)
+            //{
+            //    debug += moveToAlgebraic(move) + ": " + positions + "\n";
+            //}
+
+            BoardManager.Instance.ProcessMove(move, true, silent: true);
+        }
+
+        //Debug.Log(debug);
+        return numPositions;
+    }
+
+    private string moveToAlgebraic(Move move)
+    {
+        string files = "abcdefgh";
+
+        int startIndex = move.startSquare;
+        int targetIndex = move.targetSquare;
+
+        int startRank = startIndex / 8 + 1;
+        int startFile = startIndex % 8;
+
+        int targetRank = targetIndex / 8 + 1;
+        int targetFile = targetIndex % 8;
+
+        string algebraic = files[startFile] + startRank.ToString() + files[targetFile] + targetRank.ToString();
+
+        return algebraic;
+    }
+
+    private void PrintMoves(List<Move> moves)
+    {
+        foreach(Move move in moves)
+        {
+            string black = "";
+            if (Piece.GetColor(BoardManager.Instance.squares[move.startSquare]) == Piece.Black)
+                black = "BLACK";
+            Debug.Log(move.startSquare + " to " + move.targetSquare + " - " + black);
+        }
+    }
+
+    private bool IsSquareAttacked(int squareIndex, int opponentColor)
+    {
+        bool attackedByPawn = false, attackedByKnight = false, attackedByKing = false, attackedBySlidingPiece = false;
+
+        // Проверка пешек
+        int[] pawnSquaresOffset = { 7, 9 };
+
+        foreach (int offset in pawnSquaresOffset)
+        {
+            int pawnSquare = opponentColor == Piece.Black ? squareIndex + offset : squareIndex - offset;
+            if (pawnSquare < 0 || pawnSquare >= 64 || Math.Abs(pawnSquare % 8 - squareIndex % 8) != 1)
+                continue;
+            if (BoardManager.Instance.squares[pawnSquare] == (Piece.Pawn | opponentColor))
+                attackedByPawn = true;
+        }
+
+        // Проверка королей
+        for (int directionIndex = 0; directionIndex < 8; directionIndex++)
+        {
+            if (_numSquaresToEdge[squareIndex][directionIndex] > 0)
+            {
+                int targetSquare = squareIndex + _directionOffsets[directionIndex];
+                int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
+                if (pieceOnTargetSquare == (Piece.King | opponentColor))
+                    attackedByKing = true;
+            }
+        }
+
+        // Проверка коней
+        int[] knightSquares = _knightMoves[squareIndex];
+
+        foreach (int square in knightSquares)
+        {
+            if (BoardManager.Instance.squares[square] == (Piece.Knight | opponentColor))
+            {
+                attackedByKnight = true;
+            }
+        }
+
+        // Проверка слайдеров
+
+        for (int directionIndex = 0; directionIndex < 8; directionIndex++)
+        {
+            for (int n = 0; n < _numSquaresToEdge[squareIndex][directionIndex]; n++)
+            {
+                int targetSquare = squareIndex + _directionOffsets[directionIndex] * (n + 1);
+                int pieceOnTargetSquare = BoardManager.Instance.squares[targetSquare];
+                int pieceOnTargetSquareType = Piece.GetType(pieceOnTargetSquare);
+                if (Piece.IsSameColor(pieceOnTargetSquare, Piece.GetReversedColor(opponentColor)))
+                {
+                    break;
+                }
+
+                // Can't move any further in this direction after capturing opponent's piece
+                if (Piece.IsSameColor(pieceOnTargetSquare, opponentColor))
+                {
+                    if (pieceOnTargetSquareType == Piece.Pawn || 
+                        pieceOnTargetSquareType == Piece.King ||
+                        pieceOnTargetSquareType == Piece.Knight)
+                        break;
+                    if (pieceOnTargetSquareType == Piece.Queen ||
+                        pieceOnTargetSquareType == Piece.Rook && directionIndex >= 0 && directionIndex < 4 ||
+                        pieceOnTargetSquareType == Piece.Bishop && directionIndex >= 4 && directionIndex < 8)
+                    {
+                        attackedBySlidingPiece = true;
+                        break;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (attackedByPawn || attackedByKnight || attackedByKing || attackedBySlidingPiece)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private int FindPiece(int piece)
+    {
+        for (int i = 0; i < 64; i++)
+        {
+            if (BoardManager.Instance.squares[i] == piece)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /*
+    public List<Move> FilterLegalMoves()
+    {
+        List<Move> pseudoLegalMoves = GeneratePseudoLegalMoves();
+        List<Move> legalMoves = new List<Move>();
+        foreach (Move moveToVerify in pseudoLegalMoves)
+        {
+            BoardManager.Instance.ProcessMove(moveToVerify, false, silent: true);
+
             List<Move> opponentResponses = GeneratePseudoLegalMoves();
 
             if (!opponentResponses.Any(response => Piece.GetType(response.capturedPiece) == Piece.King))
@@ -180,6 +397,7 @@ public class MoveGenerator : MonoBehaviour
         }
         return legalMoves;
     }
+    */
 
     private void GenerateSlidingMoves(ref List<Move> pseudoLegalMoves, int startSquare, int piece)
     {
@@ -271,25 +489,32 @@ public class MoveGenerator : MonoBehaviour
         // - !Король не будет находиться под шахом после рокировки
         // - !Вообще ни одна клетка, которую посещает король во время рокировки, не должна находиться под шахом
 
-        // 0-0-0 для белых
-        if ((BoardManager.Instance.castlingRights & 2) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+        if (Piece.GetColor(piece) == Piece.White)
         {
-            TryAddCastleMove(ref pseudoLegalMoves, 4, 2, new int[] { 1, 2, 3 }, 0, 3);
+            // 0-0-0 для белых
+            if ((BoardManager.Instance.castlingRights & 2) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+            {
+                TryAddCastleMove(ref pseudoLegalMoves, 4, 2, new int[] { 1, 2, 3 }, 0, 3);
+            }
+            // 0-0 для белых
+            if ((BoardManager.Instance.castlingRights & 1) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+            {
+                TryAddCastleMove(ref pseudoLegalMoves, 4, 6, new int[] { 5, 6 }, 7, 5);
+            }
         }
-        // 0-0 для белых
-        if ((BoardManager.Instance.castlingRights & 1) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
+
+        if (Piece.GetColor(piece) == Piece.Black)
         {
-            TryAddCastleMove(ref pseudoLegalMoves, 4, 6, new int[] { 5, 6 }, 7, 5);
-        }
-        // 0-0-0 для черных
-        if ((BoardManager.Instance.castlingRights & 8) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
-        {
-            TryAddCastleMove(ref pseudoLegalMoves, 60, 58, new int[] { 57, 58, 59 }, 56, 59);
-        }
-        // 0-0 для черных
-        if ((BoardManager.Instance.castlingRights & 4) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
-        {
-            TryAddCastleMove(ref pseudoLegalMoves, 60, 62, new int[] { 61, 62 }, 63, 61);
+            // 0-0-0 для черных
+            if ((BoardManager.Instance.castlingRights & 8) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
+            {
+                TryAddCastleMove(ref pseudoLegalMoves, 60, 58, new int[] { 57, 58, 59 }, 56, 59);
+            }
+            // 0-0 для черных
+            if ((BoardManager.Instance.castlingRights & 4) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
+            {
+                TryAddCastleMove(ref pseudoLegalMoves, 60, 62, new int[] { 61, 62 }, 63, 61);
+            }
         }
     }
 
@@ -358,7 +583,10 @@ public class MoveGenerator : MonoBehaviour
         // Если пешка оказывается на последнем или первом ранге, то это точно превращение
         if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Queen));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Knight));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Rook));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Bishop));
         }
         else
             pseudoLegalMoves.Add(new Move(startSquare, targetSquare, baseType, capturedPiece));

@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using static UnityEngine.Audio.ProcessorInstance;
 
 public class BoardManager : MonoBehaviour
 {
@@ -108,8 +110,12 @@ public class BoardManager : MonoBehaviour
                     file++;
                 }
             }
-
         }
+
+        if (fen.Split(' ')[1] == "w")
+            colorToMove = 8;
+        else 
+            colorToMove = 16;
     }
 
     public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)
@@ -117,18 +123,17 @@ public class BoardManager : MonoBehaviour
         int fromIndex = move.startSquare;
         int toIndex = move.targetSquare;
         int pieceToMove = squares[fromIndex];
+        piecePromoteTo = move.promoteTo | Piece.GetColor(pieceToMove);
         Move lastMove = new Move();
 
         if (undo)
         {
-            if (moveHistory.Count == 0)
-                return;
-            lastMove = moveHistory.Pop();
-            move = lastMove.ReverseMove(); // move = reversedMove
+            if (moveHistory.Count != 0)
+            {
+                lastMove = moveHistory.Pop();
+                move = lastMove.ReverseMove(); // move = reversedMove
+            }
         }
-
-        if (silent | piecePromoteTo == Piece.None)
-            piecePromoteTo = Piece.Queen | colorToMove;
 
         switch (move.type)
         {
@@ -182,6 +187,8 @@ public class BoardManager : MonoBehaviour
 
         // Обновляем чей ход
         colorToMove = Piece.GetReversedColor(colorToMove);
+
+        float delay = silent ? 0f : 0.5f;
     }
 
     public void ExecuteMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)

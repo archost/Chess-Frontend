@@ -38,7 +38,7 @@ public class Engine : MonoBehaviour
             move = moveList[Random.Range(0, moveList.Count)];
         }
 
-        yield return new WaitForSeconds(0.1f);
+        yield return new WaitForSeconds(0.2f);
 
         if (moveList.Count > 0)
         {
