@@ -28,7 +28,7 @@ public class BoardRenderer : MonoBehaviour
     [SerializeField] private GameObject dimPrefab;
     private GameObject dim;
 
-    private const float MOVE_DURATION = 0.05f;
+    private const float MOVE_DURATION = 0.1f;
 
     private void Awake()
     {
@@ -178,7 +178,7 @@ public class BoardRenderer : MonoBehaviour
         }
     }
 
-    public void VizualizeMove(Move move, int piecePromoteTo)
+    public void VizualizeMove(Move move)
     {
         GameObject fromSquare = squares[move.startSquare];
         GameObject toSquare = squares[move.targetSquare];
@@ -188,6 +188,8 @@ public class BoardRenderer : MonoBehaviour
 
         GameObject enpassantSquare = null;
         SquareView enPassantSquareView = null;
+
+        int piecePromoteTo = move.promoteTo;
 
         if (move.enPassantTargetPawnSquare != -1)
         {
@@ -241,7 +243,6 @@ public class BoardRenderer : MonoBehaviour
             // PieceView стартовой клетки обнуляется
             fromSquareView.piece = null;
 
-            // Если это превращение, то на целевой клетке нужно создать новую фигуру
             GameObject instance = Instantiate(piecePrefabsData.GetPrefab(piecePromoteTo), toSquare.transform);
             toSquareView.piece = instance.GetComponent<PieceView>();
             instance.GetComponent<PieceView>().square = toSquareView;

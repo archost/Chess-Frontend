@@ -1,3 +1,4 @@
+using Mono.Cecil;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -29,8 +30,9 @@ public struct Move
     public int promotedPawn;
     public int previousEnPassantSquare;
     public int promoteTo;
+    public int piece;
 
-    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1, int promotedPawn = Piece.None, int promoteTo = Piece.None)
+    public Move(int startSquare, int targetSquare, MoveType type, int capturedPiece = Piece.None, int rookStart = -1, int rookTarget = -1, int enPassantTargetPawn = -1, int promotedPawn = Piece.None, int promoteTo = Piece.None, int piece = Piece.None)
     {
         this.startSquare = startSquare;
         this.targetSquare = targetSquare;
@@ -43,6 +45,7 @@ public struct Move
         this.promotedPawn = promotedPawn;
         previousEnPassantSquare = -1;
         this.promoteTo = promoteTo;
+        this.piece = piece;
     }
 
     public bool Equals(Move other) => startSquare == other.startSquare && targetSquare == other.targetSquare;
@@ -62,6 +65,8 @@ public class MoveGenerator : MonoBehaviour
     private int[][] _numSquaresToEdge;
     private int[][] _knightMoves;
 
+    public List<Move> legalMoves;
+
     private void Awake()
     {
         if (Instance == null)
@@ -77,6 +82,11 @@ public class MoveGenerator : MonoBehaviour
     private void Start()
     {
         PrecomputedMoveData();
+    }
+
+    public void GenerateLegalMoves(int colorToMove)
+    {
+        legalMoves = FilterLegalMoves(colorToMove);
     }
 
     public void PrecomputedMoveData()
@@ -138,14 +148,14 @@ public class MoveGenerator : MonoBehaviour
         }
     }
 
-    public List<Move> GeneratePseudoLegalMoves()
+    public List<Move> GeneratePseudoLegalMoves(int colorToMove)
     {
         List<Move> pseudoLegalMoves = new List<Move>();
 
         for (int startSquare = 0; startSquare < 64; startSquare++)
         {
             int piece = BoardManager.Instance.squares[startSquare];
-            if (Piece.IsSameColor(piece, BoardManager.Instance.colorToMove))
+            if (Piece.IsSameColor(piece, colorToMove))
             {
                 if (Piece.IsSlidingPiece(piece))
                 {
@@ -168,16 +178,17 @@ public class MoveGenerator : MonoBehaviour
         return pseudoLegalMoves;
     }
 
-    public List<Move> FilterLegalMoves()
+    public List<Move> FilterLegalMoves(int colorToMove)
     {
-        List<Move> pseudoLegalMoves = GeneratePseudoLegalMoves();
+        List<Move> pseudoLegalMoves = GeneratePseudoLegalMoves(colorToMove);
         List<Move> legalMoves = new List<Move>();
+        
         foreach (Move moveToVerify in pseudoLegalMoves)
         {
             BoardManager.Instance.ProcessMove(moveToVerify, false, silent: true);
 
-            int opponentColor = BoardManager.Instance.colorToMove;
-            int kingIndex = FindPiece(Piece.King | Piece.GetReversedColor(opponentColor));
+            int opponentColor = Piece.GetReversedColor(colorToMove);
+            int kingIndex = BoardManager.Instance.FindPiece(Piece.King | Piece.GetReversedColor(opponentColor));
 
             bool isKingAttacked = IsSquareAttacked(kingIndex, opponentColor);
             bool isCastlingAllowed = true;
@@ -227,67 +238,37 @@ public class MoveGenerator : MonoBehaviour
 
             BoardManager.Instance.ProcessMove(moveToVerify, true, silent: true);
         }
+
         return legalMoves;
     }
 
-    public int MoveGenerationTest(int depth)
+    public int MoveGenerationTest(int depth, ref string movesPositions, int detailedDepth = 0)
     {
         if (depth == 0)
             return 1;
-        List<Move> moves = FilterLegalMoves();
+        List<Move> moves = FilterLegalMoves(BoardManager.Instance.colorToMove);
         int numPositions = 0;
-        //string debug = "";
 
         foreach (Move move in moves)
         {
 
             BoardManager.Instance.ProcessMove(move, false, silent: true);
 
-            int positions = MoveGenerationTest(depth - 1);
+            int positions = MoveGenerationTest(depth - 1, ref movesPositions, detailedDepth);
             numPositions += positions;
 
-            //if (depth == 2)
-            //{
-            //    debug += moveToAlgebraic(move) + ": " + positions + "\n";
-            //}
+            if (depth == detailedDepth)
+            {
+                movesPositions += BoardManager.Instance.moveToText(move) + ": " + positions + "\n";
+            }
 
             BoardManager.Instance.ProcessMove(move, true, silent: true);
         }
 
-        //Debug.Log(debug);
         return numPositions;
     }
 
-    private string moveToAlgebraic(Move move)
-    {
-        string files = "abcdefgh";
-
-        int startIndex = move.startSquare;
-        int targetIndex = move.targetSquare;
-
-        int startRank = startIndex / 8 + 1;
-        int startFile = startIndex % 8;
-
-        int targetRank = targetIndex / 8 + 1;
-        int targetFile = targetIndex % 8;
-
-        string algebraic = files[startFile] + startRank.ToString() + files[targetFile] + targetRank.ToString();
-
-        return algebraic;
-    }
-
-    private void PrintMoves(List<Move> moves)
-    {
-        foreach(Move move in moves)
-        {
-            string black = "";
-            if (Piece.GetColor(BoardManager.Instance.squares[move.startSquare]) == Piece.Black)
-                black = "BLACK";
-            Debug.Log(move.startSquare + " to " + move.targetSquare + " - " + black);
-        }
-    }
-
-    private bool IsSquareAttacked(int squareIndex, int opponentColor)
+    public bool IsSquareAttacked(int squareIndex, int opponentColor)
     {
         bool attackedByPawn = false, attackedByKnight = false, attackedByKing = false, attackedBySlidingPiece = false;
 
@@ -367,18 +348,6 @@ public class MoveGenerator : MonoBehaviour
         return false;
     }
 
-    private int FindPiece(int piece)
-    {
-        for (int i = 0; i < 64; i++)
-        {
-            if (BoardManager.Instance.squares[i] == piece)
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     /*
     public List<Move> FilterLegalMoves()
     {
@@ -425,7 +394,7 @@ public class MoveGenerator : MonoBehaviour
                     break;
                 }
 
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTargetSquare));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTargetSquare, piece: piece));
 
                 // Can't move any further in this direction after capturing opponent's piece
                 if (Piece.IsSameColor(pieceOnTargetSquare, Piece.GetReversedColor(piece)))
@@ -452,7 +421,7 @@ public class MoveGenerator : MonoBehaviour
                 if (pieceOnTarget != 0)
                     moveType = MoveType.Take;
 
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTarget));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTarget, piece: piece));
             }
         }
     }
@@ -478,7 +447,7 @@ public class MoveGenerator : MonoBehaviour
                 if (pieceOnTargetSquare != 0)
                     moveType = MoveType.Take;
 
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTargetSquare));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, moveType, pieceOnTargetSquare, piece: piece));
             }
         }
 
@@ -494,12 +463,12 @@ public class MoveGenerator : MonoBehaviour
             // 0-0-0 для белых
             if ((BoardManager.Instance.castlingRights & 2) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
             {
-                TryAddCastleMove(ref pseudoLegalMoves, 4, 2, new int[] { 1, 2, 3 }, 0, 3);
+                TryAddCastleMove(ref pseudoLegalMoves, 4, 2, new int[] { 1, 2, 3 }, 0, 3, piece);
             }
             // 0-0 для белых
             if ((BoardManager.Instance.castlingRights & 1) != 0 && (BoardManager.Instance.squares[4] == (Piece.King | Piece.White)))
             {
-                TryAddCastleMove(ref pseudoLegalMoves, 4, 6, new int[] { 5, 6 }, 7, 5);
+                TryAddCastleMove(ref pseudoLegalMoves, 4, 6, new int[] { 5, 6 }, 7, 5, piece);
             }
         }
 
@@ -508,12 +477,12 @@ public class MoveGenerator : MonoBehaviour
             // 0-0-0 для черных
             if ((BoardManager.Instance.castlingRights & 8) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
             {
-                TryAddCastleMove(ref pseudoLegalMoves, 60, 58, new int[] { 57, 58, 59 }, 56, 59);
+                TryAddCastleMove(ref pseudoLegalMoves, 60, 58, new int[] { 57, 58, 59 }, 56, 59, piece);
             }
             // 0-0 для черных
             if ((BoardManager.Instance.castlingRights & 4) != 0 && (BoardManager.Instance.squares[60] == (Piece.King | Piece.Black)))
             {
-                TryAddCastleMove(ref pseudoLegalMoves, 60, 62, new int[] { 61, 62 }, 63, 61);
+                TryAddCastleMove(ref pseudoLegalMoves, 60, 62, new int[] { 61, 62 }, 63, 61, piece);
             }
         }
     }
@@ -528,7 +497,7 @@ public class MoveGenerator : MonoBehaviour
         // Ход на 1 клетку
         if (targetSquare >= 0 && targetSquare < 64 && BoardManager.Instance.squares[targetSquare] == Piece.None)
         {
-            AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Move, promotedPawn: piece);
+            AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Move, promotedPawn: piece, piece: piece);
 
             // Ход на 2 клетки: мы уже проверили, что на первой клетке пусто, нужно проверить только вторую
             // Ограничение на targetSquare нас не волнует, потому что мы начинаем с 1 или 6 ранга (индексы)
@@ -537,7 +506,7 @@ public class MoveGenerator : MonoBehaviour
             targetSquare = startSquare + direction * 2;
             if (isStartingPos && BoardManager.Instance.squares[targetSquare] == Piece.None)
             {
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Move));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Move, piece: piece));
             }
         }
 
@@ -556,18 +525,18 @@ public class MoveGenerator : MonoBehaviour
 
             if (targetPiece != Piece.None && !Piece.IsSameColor(piece, targetPiece))
             {
-                AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Take, targetPiece, promotedPawn: piece);
+                AddPawnMove(ref pseudoLegalMoves, startSquare, targetSquare, MoveType.Take, targetPiece, promotedPawn: piece, piece: piece);
             }
             else if (targetSquare == BoardManager.Instance.enPassantTargetSquare)
             {
                 // Сразу же вычисляем клетку пешки, которую мы будем рубить
                 int enPassantedPawnSquare = Piece.GetColor(piece) == Piece.White ? targetSquare - 8 : targetSquare + 8;
-                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.EnPassant, BoardManager.Instance.squares[enPassantedPawnSquare], - 1, -1, enPassantedPawnSquare));
+                pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.EnPassant, BoardManager.Instance.squares[enPassantedPawnSquare], - 1, -1, enPassantedPawnSquare, piece: piece));
             }
         }
     }
 
-    private void TryAddCastleMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, int[] pathSquares, int rookStart, int rookTarget)
+    private void TryAddCastleMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, int[] pathSquares, int rookStart, int rookTarget, int piece)
     {
         for (int i = 0; i < pathSquares.Length; i++)
         {
@@ -575,20 +544,20 @@ public class MoveGenerator : MonoBehaviour
                 return;
         }
 
-        pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Castle, 0, rookStart, rookTarget));
+        pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Castle, 0, rookStart, rookTarget, piece: piece));
     }
 
-    private void AddPawnMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, MoveType baseType, int capturedPiece = Piece.None, int promotedPawn = Piece.None)
+    private void AddPawnMove(ref List<Move> pseudoLegalMoves, int startSquare, int targetSquare, MoveType baseType, int capturedPiece = Piece.None, int promotedPawn = Piece.None, int piece = Piece.None)
     {
         // Если пешка оказывается на последнем или первом ранге, то это точно превращение
         if (targetSquare / 8 == 7 || targetSquare / 8 == 0)
         {
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Queen));
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Knight));
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Rook));
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Bishop));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Queen, piece: piece));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Knight, piece: piece));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Rook, piece: piece));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, MoveType.Promote, capturedPiece, promotedPawn: promotedPawn, promoteTo: Piece.Bishop, piece: piece));
         }
         else
-            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, baseType, capturedPiece));
+            pseudoLegalMoves.Add(new Move(startSquare, targetSquare, baseType, capturedPiece, piece: piece));
     }
 }

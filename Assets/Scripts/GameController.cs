@@ -43,13 +43,12 @@ public class GameController : MonoBehaviour
     public void ProcessRightClick(int squareIndex)
     {
         BoardRenderer.Instance.ToggleHighlightSquare(squareIndex);
-        // StartCoroutine(Engine.Instance.MakeARandomMove());
+        StartCoroutine(Engine.Instance.MakeARandomMove());
     }
 
     public void ProcessClick(int squareIndex)
     {
         int selectedPiece = BoardManager.Instance.squares[squareIndex];
-        List<Move> legalMoves = MoveGenerator.Instance.FilterLegalMoves();
 
         if (_isSelection)
         {
@@ -57,7 +56,7 @@ public class GameController : MonoBehaviour
             if (selectedPiece != 0 && Piece.GetColor(selectedPiece) == BoardManager.Instance.colorToMove)
             {
                 // Подсветить легальные ходы
-                foreach (var legalMove in legalMoves)
+                foreach (var legalMove in MoveGenerator.Instance.legalMoves)
                 {
                     if (squareIndex == legalMove.startSquare)
                     {
@@ -111,14 +110,17 @@ public class GameController : MonoBehaviour
         Move move = new Move(_selectedIndex, targetSquareIndex, MoveType.Undefined);
         bool legal = false;
 
-        List<Move> legalMoves = MoveGenerator.Instance.FilterLegalMoves();
+        if (BoardManager.Instance.isCheckmate || BoardManager.Instance.isStalemate)
+        {
+            Debug.Log("It's mate or stalemate");
+            return;
+        }
 
-        // Проверить, легален ли ход
-        foreach (var legalMove in legalMoves)
+        foreach (var legalMove in MoveGenerator.Instance.legalMoves)
         {
             if (move.Equals(legalMove))
             {
-                Debug.Log("This move is legal (kinda)");
+                Debug.Log("This move is legal (probably)");
                 move = legalMove;
                 legal = true;
             }
@@ -130,6 +132,8 @@ public class GameController : MonoBehaviour
             return;
         }
 
+
+
         if (move.type == MoveType.Promote)
         {
             InputManager.Instance.isPromotion = true;
@@ -138,12 +142,12 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        ExecuteMove(move, Piece.None);
+        ExecuteMove(move);
     }
 
-    public void ExecuteMove(Move move, int promotionPieceType)
+    public void ExecuteMove(Move move)
     {
-        BoardManager.Instance.ProcessMove(move, false, promotionPieceType);
+        BoardManager.Instance.ProcessMove(move, false);
 
         BoardRenderer.Instance.SelectSquare(move.targetSquare);
         BoardRenderer.Instance.UnselectSquare(move.startSquare);
@@ -156,8 +160,8 @@ public class GameController : MonoBehaviour
         _isSelection = true;
         _lastMove = move;
 
-        // if (BoardManager.Instance.colorToMove == Piece.Black)
-        //     StartCoroutine(Engine.Instance.MakeARandomMove());
+        //if (BoardManager.Instance.colorToMove == Piece.Black)
+        //    StartCoroutine(Engine.Instance.MakeARandomMove());
     }
 
     public void OnPromotionPieceSelected(int squareIndex)
@@ -168,13 +172,14 @@ public class GameController : MonoBehaviour
         else
             deck = BoardManager.Instance.blackPromotionDeck;
 
-        int pieceType = deck[squareIndex];
+        int piecePromoteTo = deck[squareIndex];
 
         BoardRenderer.Instance.HidePromotionMenu();
 
         if (_pendingPromotionMove.type != MoveType.Undefined)
         {
-            ExecuteMove(_pendingPromotionMove, pieceType);
+            _pendingPromotionMove.promoteTo = piecePromoteTo;
+            ExecuteMove(_pendingPromotionMove);
             _pendingPromotionMove = new Move();
         }
     }

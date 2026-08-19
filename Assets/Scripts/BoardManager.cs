@@ -1,14 +1,23 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using TMPro;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.UIElements;
 using static UnityEngine.Audio.ProcessorInstance;
 
 public class BoardManager : MonoBehaviour
 {
     public static BoardManager Instance { get; private set; }
+
+    [SerializeField] private TMP_Text endGameText;
+    [SerializeField] private Transform moveHistoryText;
+    [SerializeField] private GameObject moveTextPrefab;
+    private Stack<GameObject> moveHistoryItems = new Stack<GameObject>();
 
     public int[] squares;
     public Stack<Move> moveHistory;
@@ -27,6 +36,13 @@ public class BoardManager : MonoBehaviour
     public int castlingRights = 15; // 1111 - B0-0-0, B0-0, W0-0-0, W0-0 - 8, 4, 2, 1 
     private int[] castlingRightsMask;
 
+    public bool isCheck = false;
+    public bool isCheckmate = false;
+    public bool isStalemate = false;
+    public bool isDraw = false;
+
+    public bool gameEnded = false;
+
     private void Awake()
     {
         if (Instance == null)
@@ -42,6 +58,11 @@ public class BoardManager : MonoBehaviour
         {
             Destroy(gameObject);
         }
+    }
+
+    private void Start()
+    {
+        MoveGenerator.Instance.GenerateLegalMoves(colorToMove);
     }
 
     private void InitializeCastlingMasks()
@@ -70,6 +91,116 @@ public class BoardManager : MonoBehaviour
             Piece.Knight | Piece.Black
         };
 
+    }
+
+    public void AddMove(Move move)
+    {
+        GameObject newItem = Instantiate(moveTextPrefab, moveHistoryText);
+        newItem.GetComponent<TextMeshProUGUI>().text = moveHistory.Count.ToString() + ". ";
+
+        if (!gameEnded)
+            newItem.GetComponent<TextMeshProUGUI>().text += moveToAlgebraic(move);
+        else
+        {
+            if (isDraw)
+                newItem.GetComponent<TextMeshProUGUI>().text = "1/2 - 1/2";
+            else
+                newItem.GetComponent<TextMeshProUGUI>().text = colorToMove == Piece.White ? "1 - 0" : "0 - 1";
+        }
+
+        moveHistoryItems.Push(newItem);
+    }
+
+    private void RemoveMove()
+    {
+        GameObject moveToDelete;
+        if (gameEnded)
+        {
+            moveToDelete = moveHistoryItems.Pop();
+            Destroy(moveToDelete);
+        }
+        moveToDelete = moveHistoryItems.Pop();
+        Destroy(moveToDelete);
+    }
+
+    public int FindPiece(int piece)
+    {
+        for (int i = 0; i < 64; i++)
+        {
+            if (squares[i] == piece)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public string moveToText(Move move)
+    {
+        string files = "abcdefgh";
+
+        int startIndex = move.startSquare;
+        int targetIndex = move.targetSquare;
+
+        int startRank = startIndex / 8 + 1;
+        int startFile = startIndex % 8;
+
+        int targetRank = targetIndex / 8 + 1;
+        int targetFile = targetIndex % 8;
+
+        string text = files[startFile] + startRank.ToString() + files[targetFile] + targetRank.ToString();
+
+        return text;
+    }
+
+    public string moveToAlgebraic(Move move)
+    {
+        string files = "abcdefgh";
+        Dictionary<int, string> pieces = new Dictionary<int, string>()
+        {
+            { Piece.King, "K"},
+            { Piece.Queen, "Q"},
+            { Piece.Rook, "R"},
+            { Piece.Bishop, "B"},
+            { Piece.Knight, "N"},
+            { Piece.Pawn, ""},
+        };
+
+        if (move.type == MoveType.Castle)
+        {
+            if (move.targetSquare - move.startSquare == 2)
+                return "0-0";
+            else
+                return "0-0-0";
+        }
+
+        string piece = pieces[Piece.GetType(move.piece)];
+
+        int startIndex = move.startSquare;
+        int targetIndex = move.targetSquare;
+
+        int targetRank = targetIndex / 8 + 1;
+        int targetFile = targetIndex % 8;
+
+        string algebraic = piece;
+
+        if (move.type == MoveType.Take)
+        {
+            if (Piece.GetType(move.piece) == Piece.Pawn)
+            {
+                algebraic = files[move.startSquare % 8].ToString();
+            }
+            algebraic += "x";
+        }
+
+        algebraic += files[targetFile] + targetRank.ToString();
+
+        if (isCheckmate)
+            algebraic += "#";
+        else if (isCheck)
+            algebraic += "+";
+
+        return algebraic;
     }
 
     private void FenToBoard()
@@ -118,21 +249,28 @@ public class BoardManager : MonoBehaviour
             colorToMove = 16;
     }
 
-    public void ProcessMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)
+    public void ProcessMove(Move move, bool undo, bool silent = false)
     {
         int fromIndex = move.startSquare;
         int toIndex = move.targetSquare;
         int pieceToMove = squares[fromIndex];
-        piecePromoteTo = move.promoteTo | Piece.GetColor(pieceToMove);
+        if (silent)
+        {
+            move.promoteTo |= Piece.GetColor(pieceToMove);
+        }
         Move lastMove = new Move();
 
         if (undo)
         {
-            if (moveHistory.Count != 0)
-            {
-                lastMove = moveHistory.Pop();
-                move = lastMove.ReverseMove(); // move = reversedMove
-            }
+            if (moveHistory.Count == 0)
+                return;
+            if (!silent)
+                RemoveMove();
+            isCheckmate = false;
+            isStalemate = false;
+            gameEnded = false;
+            lastMove = moveHistory.Pop();
+            move = lastMove.ReverseMove(); // move = reversedMove
         }
 
         switch (move.type)
@@ -152,7 +290,7 @@ public class BoardManager : MonoBehaviour
                 ExecuteMove(move, undo, silent: silent);
                 break;
             case MoveType.Promote:
-                ExecuteMove(move, undo, piecePromoteTo, silent: silent);
+                ExecuteMove(move, undo, silent: silent);
                 break;
             default:
                 Debug.Log("How did we get here?");
@@ -185,13 +323,72 @@ public class BoardManager : MonoBehaviour
             moveHistory.Push(move);
         }
 
-        // Обновляем чей ход
-        colorToMove = Piece.GetReversedColor(colorToMove);
+        if (!silent)
+        {
+            // Проверяем, не находится ли под шахом король оппонента
+            if (MoveGenerator.Instance.IsSquareAttacked(FindPiece(Piece.King | Piece.GetReversedColor(colorToMove)), colorToMove))
+            {
+                isCheck = true;
+            }
+            else
+            {
+                isCheck = false;
+            }
 
-        float delay = silent ? 0f : 0.5f;
+            // Генерируем новый список легальных ходов для оппонента
+            MoveGenerator.Instance.GenerateLegalMoves(Piece.GetReversedColor(colorToMove));
+
+            if (MoveGenerator.Instance.legalMoves.Count == 0)
+            {
+                // У оппонента нет легальных ходов, значит это либо мат, либо пат
+                if (isCheck)
+                    isCheckmate = true;
+                else
+                {
+                    isStalemate = true;
+                    isDraw = true;
+                }
+                // Вызвать методы:
+                // Выписать в ходы 1-0, 0-1 и т.д.
+                // Вывести текст "Draw", "White won", "Black won"
+            }
+
+            if (!undo)
+            {
+                AddMove(move);
+
+                if (MoveGenerator.Instance.legalMoves.Count == 0)
+                {
+                    gameEnded = true;
+                    AddMove(move);
+                    ShowEndText(false);
+                }
+            }
+
+        }
+
+        colorToMove = Piece.GetReversedColor(colorToMove);
     }
 
-    public void ExecuteMove(Move move, bool undo, int piecePromoteTo = Piece.None, bool silent = false)
+    private void ShowEndText(bool clear)
+    {
+        if (clear)
+        {
+            endGameText.text = "";
+            return;
+        }
+        if (isDraw)
+        {
+            endGameText.text = "Draw!";
+        }
+        if (isCheckmate)
+        {
+            endGameText.text = "Checkmate!\n";
+            endGameText.text += colorToMove == Piece.White ? "White won" : "Black won";
+        }
+    }
+
+    public void ExecuteMove(Move move, bool undo, bool silent = false)
     {
         // int fromIndex, int toIndex, int piecePromoteTo = 0, int capturedPiece = 0, bool enPassant = false
         int fromIndex = move.startSquare;
@@ -200,14 +397,14 @@ public class BoardManager : MonoBehaviour
 
         if (!undo)
         {
-            squares[toIndex] = move.type == MoveType.Promote ? piecePromoteTo : squares[fromIndex];
+            squares[toIndex] = move.type == MoveType.Promote ? move.promoteTo : squares[fromIndex];
             squares[fromIndex] = 0;
             if (move.type == MoveType.EnPassant)
             {
                 squares[move.enPassantTargetPawnSquare] = 0;
             }
             if (!silent)
-                BoardRenderer.Instance.VizualizeMove(move, piecePromoteTo);
+                BoardRenderer.Instance.VizualizeMove(move);
         }
         else
         {
